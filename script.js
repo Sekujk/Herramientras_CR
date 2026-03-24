@@ -341,10 +341,10 @@ function initAudioCutter() {
                             }
                         }
 
-                        console.log('🔄 Segmento', (i + 1) + '/' + numSegments, '- Iniciando MP3 encoding...');
-                        const mp3Blob = await bufferToWave(segmentBuffer);
-                        console.log('✅ Segmento', (i + 1), 'listo -', (mp3Blob.size / 1024).toFixed(2), 'KB');
-                        zip.file(`${fileName}-${i + 1}.mp3`, mp3Blob);
+                        console.log('🔄 Segmento', (i + 1) + '/' + numSegments, '- Iniciando audio encoding...');
+                        const audioBlob = await bufferToWave(segmentBuffer);
+                        console.log('✅ Segmento', (i + 1), 'listo -', (audioBlob.size / 1024).toFixed(2), 'KB');
+                        zip.file(`${fileName}-${i + 1}.ogg`, audioBlob);
 
                         const progress = 50 + (i / numSegments) * 40;
                         updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
@@ -1392,73 +1392,6 @@ function audioBufferToWavBytes(audioBuffer) {
 
     return new Uint8Array(buffer);
 }
-
-class AudioWorkerPool {
-    constructor(maxWorkers = 4) {
-        this.workers = [];
-        this.queue = [];
-        this.taskId = 0;
-
-        for (let i = 0; i < maxWorkers; i++) {
-            const worker = new Worker('audioWorker.js');
-            this.workers.push({ worker, busy: false, promises: {} });
-        }
-    }
-
-    async encodeAudio(audioBuffer, format = 'opus', bitrate = 48) {
-        return new Promise((resolve, reject) => {
-            const taskId = ++this.taskId;
-            // Convertir AudioBuffer a WAV bytes primero (no se puede enviar AudioBuffer directamente)
-            const wavBytes = audioBufferToWavBytes(audioBuffer);
-            const task = { wavBytes, format, bitrate, resolve, reject, taskId };
-
-            const available = this.workers.find(w => !w.busy);
-            if (available) {
-                this.runTask(available, task);
-            } else {
-                this.queue.push(task);
-            }
-        });
-    }
-
-    runTask(workerObj, task) {
-        workerObj.busy = true;
-        const { wavBytes, format, bitrate, taskId } = task;
-
-        workerObj.promises[taskId] = { resolve: task.resolve, reject: task.reject };
-
-        workerObj.worker.onmessage = (e) => {
-            const { id, success, result, error } = e.data;
-
-            if (workerObj.promises[id]) {
-                if (success) {
-                    const blob = new Blob([result], { type: format === 'opus' ? 'audio/ogg' : `audio/${format}` });
-                    workerObj.promises[id].resolve(blob);
-                } else {
-                    workerObj.promises[id].reject(new Error(error));
-                }
-                delete workerObj.promises[id];
-            }
-
-            workerObj.busy = false;
-
-            if (this.queue.length > 0) {
-                const nextTask = this.queue.shift();
-                this.runTask(workerObj, nextTask);
-            }
-        };
-
-        workerObj.worker.postMessage({
-            wavBytes,
-            format,
-            bitrate,
-            id: taskId
-        }, [wavBytes.buffer]); // Transferir el buffer para mejor rendimiento
-    }
-}
-
-// Inicializar pool de workers
-const audioWorkerPool = new AudioWorkerPool(4);
 
 // Variable para FFmpeg WASM en el main thread
 let ffmpegInstance = null;
