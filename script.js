@@ -548,33 +548,42 @@ function initAudioConverter() {
 }
 
 async function convertAudioFormat(file, targetFormat, progressContainer) {
-    // Si es video, extraer audio primero
-    if (file.type.startsWith('video/')) {
-        const audioBlob = await extractAudioFromVideo(file, (progress, message) => {
-            if (progressContainer) {
-                updateProgress(progressContainer, message, progress * 0.7);
-            }
-        });
+    try {
+        // Si es video, extraer audio primero
+        if (file.type.startsWith('video/')) {
+            const audioBlob = await extractAudioFromVideo(file, (progress, message) => {
+                try {
+                    if (progressContainer) {
+                        updateProgress(progressContainer, message, progress * 0.7);
+                    }
+                } catch (error) {
+                    console.error('Error in progress callback:', error);
+                }
+            });
 
-        if (progressContainer) {
-            updateProgress(progressContainer, 'Convirtiendo...', 70);
+            if (progressContainer) {
+                updateProgress(progressContainer, 'Convirtiendo...', 70);
+            }
+
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            return bufferToWave(audioBuffer);
         }
 
-        const arrayBuffer = await audioBlob.arrayBuffer();
+        // Si es audio, procesar directamente
+        if (progressContainer) {
+            updateProgress(progressContainer, 'Convirtiendo...', 50);
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         return bufferToWave(audioBuffer);
+    } catch (error) {
+        console.error('Error in convertAudioFormat:', error);
+        throw error;
     }
-
-    // Si es audio, procesar directamente
-    if (progressContainer) {
-        updateProgress(progressContainer, 'Convirtiendo...', 50);
-    }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    return bufferToWave(audioBuffer);
 }
 
 // ==================== EXTRACTOR DE AUDIO DE VIDEO ====================
@@ -1311,35 +1320,66 @@ function createForestNoise(audioContext) {
 // ==================== FUNCIONES AUXILIARES ====================
 // Convertir AudioBuffer a WebM comprimido usando MediaRecorder
 async function bufferToWebM(audioBuffer) {
-    return new Promise((resolve) => {
-        const audioCtx = new AudioContext();
-        const destination = audioCtx.createMediaStreamAudioDestinationNode();
+    return new Promise((resolve, reject) => {
+        try {
+            const audioCtx = new AudioContext();
+            const destination = audioCtx.createMediaStreamAudioDestinationNode();
 
-        // Crear buffer source y conectar
-        const bufferSource = audioCtx.createBufferSource();
-        bufferSource.buffer = audioBuffer;
-        bufferSource.connect(destination);
+            // Crear buffer source y conectar
+            const bufferSource = audioCtx.createBufferSource();
+            bufferSource.buffer = audioBuffer;
+            bufferSource.connect(destination);
 
-        // Crear recorder con WebM/Opus (comprimido)
-        const mediaRecorder = new MediaRecorder(destination.stream, {
-            mimeType: 'audio/webm;codecs=opus',
-            audioBitsPerSecond: 128000
-        });
+            // Crear recorder con WebM/Opus (comprimido)
+            const mediaRecorder = new MediaRecorder(destination.stream, {
+                mimeType: 'audio/webm;codecs=opus',
+                audioBitsPerSecond: 128000
+            });
 
-        const chunks = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'audio/webm' });
-            resolve(blob);
-            audioCtx.close();
-        };
+            const chunks = [];
+            let isResolved = false;
 
-        mediaRecorder.start();
-        bufferSource.start(0);
-        bufferSource.stop(audioCtx.currentTime + audioBuffer.duration);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    chunks.push(e.data);
+                }
+            };
 
-        // Detener grabación después de la duración del buffer
-        setTimeout(() => mediaRecorder.stop(), audioBuffer.duration * 1000);
+            mediaRecorder.onstop = () => {
+                if (!isResolved) {
+                    isResolved = true;
+                    try {
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        audioCtx.close();
+                        resolve(blob);
+                    } catch (error) {
+                        audioCtx.close();
+                        reject(error);
+                    }
+                }
+            };
+
+            mediaRecorder.onerror = (e) => {
+                if (!isResolved) {
+                    isResolved = true;
+                    audioCtx.close();
+                    reject(new Error('Error MediaRecorder: ' + e.error));
+                }
+            };
+
+            mediaRecorder.start();
+            bufferSource.start(0);
+            bufferSource.stop(audioCtx.currentTime + audioBuffer.duration);
+
+            // Detener grabación después de la duración del buffer
+            setTimeout(() => {
+                if (!isResolved && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            }, audioBuffer.duration * 1000 + 100);
+        } catch (error) {
+            reject(error);
+        }
     });
 }
 
@@ -1349,32 +1389,40 @@ function bufferToWave(audioBuffer) {
 }
 
 function updateProgress(progressContainer, text, percentage) {
-    const id = progressContainer.id || 'unknown';
+    if (!progressContainer || !progressContainer.id) {
+        return; // Salir silenciosamente si no hay container válido
+    }
+
+    const id = progressContainer.id;
 
     // Throttle: no actualizar si pasó menos de 50ms desde la última actualización
     if (progressThrottle[id] && Date.now() - progressThrottle[id].lastUpdate < 50) {
         return;
     }
 
-    const progressBar = progressContainer.querySelector('.progress-fill');
-    const progressText = progressContainer.querySelector('.progress-text');
+    try {
+        const progressBar = progressContainer.querySelector('.progress-fill');
+        const progressText = progressContainer.querySelector('.progress-text');
 
-    const roundedPercentage = Math.round(percentage);
+        const roundedPercentage = Math.round(percentage);
 
-    // Solo actualizar si hubo cambio significativo
-    if (progressThrottle[id]?.lastPercentage !== roundedPercentage || progressThrottle[id]?.lastText !== text) {
-        if (progressBar) {
-            progressBar.style.width = roundedPercentage + '%';
+        // Solo actualizar si hubo cambio significativo
+        if (progressThrottle[id]?.lastPercentage !== roundedPercentage || progressThrottle[id]?.lastText !== text) {
+            if (progressBar) {
+                progressBar.style.width = roundedPercentage + '%';
+            }
+            if (progressText) {
+                progressText.textContent = text;
+            }
+
+            progressThrottle[id] = {
+                lastUpdate: Date.now(),
+                lastPercentage: roundedPercentage,
+                lastText: text
+            };
         }
-        if (progressText) {
-            progressText.textContent = text;
-        }
-
-        progressThrottle[id] = {
-            lastUpdate: Date.now(),
-            lastPercentage: roundedPercentage,
-            lastText: text
-        };
+    } catch (error) {
+        console.error('Error updating progress:', error);
     }
 }
 
