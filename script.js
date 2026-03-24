@@ -1326,9 +1326,9 @@ async function bufferToWAV(audioBuffer) {
             // Usar 22050Hz para tamaño más pequeño
             const targetSampleRate = 22050;
             const numOfChannels = audioBuffer.numberOfChannels;
-            const kbps = 128; // Bitrate 128kbps = excelente para audio hablado
+            const kbps = 128;
 
-            // Resamplear si es necesario
+            // Resamplear rápidamente
             let audioData = [];
             const ratio = targetSampleRate / audioBuffer.sampleRate;
 
@@ -1350,44 +1350,59 @@ async function bufferToWAV(audioBuffer) {
                 audioData.push(resampled);
             }
 
-            // Usar lamejs para codificar a MP3
             if (!window.lamejs) {
                 throw new Error('lamejs librería no cargada');
             }
 
             const encoder = new window.lamejs.Mp3Encoder(numOfChannels, targetSampleRate, kbps);
             const mp3Data = [];
+            const chunkSize = 1152;
+            let chunkIndex = 0;
+            const totalChunks = Math.ceil(audioData[0].length / chunkSize);
 
-            // Procesar audio en chunks
-            const chunkSize = 1152; // Tamaño estándar de frame MP3
-            for (let i = 0; i < audioData[0].length; i += chunkSize) {
-                let left = audioData[0].subarray(i, i + chunkSize);
-                let right = numOfChannels > 1 ? audioData[1].subarray(i, i + chunkSize) : left;
+            // Procesar chunks de forma no-bloqueante
+            const processChunk = () => {
+                const i = chunkIndex * chunkSize;
 
-                // Convertir Float32 a Int16 como Arrays (no TypedArrays)
-                const int16Left = [];
-                const int16Right = [];
+                if (i >= audioData[0].length) {
+                    // Finalizar encoding
+                    const finalChunk = encoder.flush();
+                    if (finalChunk.length > 0) {
+                        mp3Data.push(finalChunk);
+                    }
 
-                for (let j = 0; j < left.length; j++) {
-                    int16Left[j] = Math.max(-1, Math.min(1, left[j])) < 0 ? left[j] * 0x8000 : left[j] * 0x7FFF;
-                    int16Right[j] = Math.max(-1, Math.min(1, right[j])) < 0 ? right[j] * 0x8000 : right[j] * 0x7FFF;
+                    const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                    resolve(mp3Blob);
+                    return;
                 }
 
-                const chunk = encoder.encodeBuffer(int16Left, int16Right);
-                if (chunk.length > 0) {
-                    mp3Data.push(chunk);
+                // Procesar 5 chunks por iteración (balance entre velocidad y responsividad)
+                for (let batch = 0; batch < 5 && i + (batch * chunkSize) < audioData[0].length; batch++) {
+                    const idx = i + (batch * chunkSize);
+                    let left = audioData[0].subarray(idx, idx + chunkSize);
+                    let right = numOfChannels > 1 ? audioData[1].subarray(idx, idx + chunkSize) : left;
+
+                    const int16Left = [];
+                    const int16Right = [];
+
+                    for (let j = 0; j < left.length; j++) {
+                        int16Left[j] = Math.max(-1, Math.min(1, left[j])) < 0 ? left[j] * 0x8000 : left[j] * 0x7FFF;
+                        int16Right[j] = Math.max(-1, Math.min(1, right[j])) < 0 ? right[j] * 0x8000 : right[j] * 0x7FFF;
+                    }
+
+                    const chunk = encoder.encodeBuffer(int16Left, int16Right);
+                    if (chunk.length > 0) {
+                        mp3Data.push(chunk);
+                    }
+
+                    chunkIndex++;
                 }
-            }
 
-            // Finalizar codificación
-            const finalChunk = encoder.flush();
-            if (finalChunk.length > 0) {
-                mp3Data.push(finalChunk);
-            }
+                // Permitir que el navegador responda antes del siguiente lote
+                setTimeout(processChunk, 0);
+            };
 
-            // Crear Blob MP3
-            const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
-            resolve(mp3Blob);
+            processChunk();
 
         } catch (error) {
             console.error('Error en MP3 encoding:', error);
