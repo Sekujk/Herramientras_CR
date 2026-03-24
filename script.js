@@ -330,8 +330,8 @@ function initAudioCutter() {
                             }
                         }
 
-                        const webmBlob = await bufferToWave(segmentBuffer);
-                        zip.file(`${fileName}-${i + 1}.webm`, webmBlob);
+                        const wavBlob = bufferToWave(segmentBuffer);
+                        zip.file(`${fileName}-${i + 1}.wav`, wavBlob);
 
                         const progress = 50 + (i / numSegments) * 40;
                         updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
@@ -1319,74 +1319,82 @@ function createForestNoise(audioContext) {
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
-// Convertir AudioBuffer a WebM comprimido usando MediaRecorder
+// Convertir AudioBuffer a WebM comprimido o WAV
 async function bufferToWebM(audioBuffer) {
-    return new Promise((resolve, reject) => {
-        try {
-            const audioCtx = new AudioContext();
-            const destination = audioCtx.createMediaStreamDestination();
-
-            // Crear buffer source y conectar
-            const bufferSource = audioCtx.createBufferSource();
-            bufferSource.buffer = audioBuffer;
-            bufferSource.connect(destination);
-
-            // Crear recorder con WebM/Opus (comprimido)
-            const mediaRecorder = new MediaRecorder(destination.stream, {
-                mimeType: 'audio/webm;codecs=opus',
-                audioBitsPerSecond: 128000
-            });
-
-            const chunks = [];
-            let isResolved = false;
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    chunks.push(e.data);
-                }
-            };
-
-            mediaRecorder.onstop = () => {
-                if (!isResolved) {
-                    isResolved = true;
-                    try {
-                        const blob = new Blob(chunks, { type: 'audio/webm' });
-                        audioCtx.close();
-                        resolve(blob);
-                    } catch (error) {
-                        audioCtx.close();
-                        reject(error);
-                    }
-                }
-            };
-
-            mediaRecorder.onerror = (e) => {
-                if (!isResolved) {
-                    isResolved = true;
-                    audioCtx.close();
-                    reject(new Error('Error MediaRecorder: ' + e.error));
-                }
-            };
-
-            mediaRecorder.start();
-            bufferSource.start(0);
-            bufferSource.stop(audioCtx.currentTime + audioBuffer.duration);
-
-            // Detener grabación después de la duración del buffer
-            setTimeout(() => {
-                if (!isResolved && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
-            }, audioBuffer.duration * 1000 + 100);
-        } catch (error) {
-            reject(error);
-        }
-    });
+    // Fallback a WAV - es más confiable que WebM en navegadores
+    // WAV ofrece máxima compatibilidad y es rápido
+    return bufferToWAV(audioBuffer);
 }
 
-// Mantener bufferToWave como alias para compatibilidad
+// Convertir AudioBuffer a WAV
+function bufferToWAV(audioBuffer) {
+    const numOfChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numOfChannels * bytesPerSample;
+
+    // Recolectar datos de audio de todos los canales
+    const audioData = new Float32Array(audioBuffer.length * numOfChannels);
+
+    for (let channel = 0; channel < numOfChannels; channel++) {
+        const channelData = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < audioBuffer.length; i++) {
+            audioData[i * numOfChannels + channel] = channelData[i];
+        }
+    }
+
+    const dataLength = audioData.length * (bitDepth / 8);
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+
+    const writeUint32 = (offset, value) => {
+        view.setUint32(offset, value, true);
+    };
+
+    const writeUint16 = (offset, value) => {
+        view.setUint16(offset, value, true);
+    };
+
+    // WAV header
+    writeString(0, 'RIFF');
+    writeUint32(4, 36 + dataLength);
+    writeString(8, 'WAVE');
+
+    // fmt subchunk
+    writeString(12, 'fmt ');
+    writeUint32(16, 16);
+    writeUint16(20, format);
+    writeUint16(22, numOfChannels);
+    writeUint32(24, sampleRate);
+    writeUint32(28, sampleRate * blockAlign);
+    writeUint16(32, blockAlign);
+    writeUint16(34, bitDepth);
+
+    // data subchunk
+    writeString(36, 'data');
+    writeUint32(40, dataLength);
+
+    // Escribir audio data (PCM 16-bit)
+    const converted = new Int16Array(buffer, 44);
+    for (let i = 0; i < audioData.length; i++) {
+        converted[i] = Math.max(-1, Math.min(1, audioData[i])) < 0 ? audioData[i] * 0x8000 : audioData[i] * 0x7FFF;
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+// Alias para compatibilidad (bufferToWAV es synchronous)
 function bufferToWave(audioBuffer) {
-    return bufferToWebM(audioBuffer);
+    return bufferToWAV(audioBuffer);
 }
 
 function updateProgress(progressContainer, text, percentage) {
