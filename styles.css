@@ -137,7 +137,7 @@ header p {
 }
 
 .upload-area {
-    border: 1px solid var(--border);
+    border: 2px dashed var(--border);
     border-radius: 10px;
     padding: 2.5rem 2rem;
     text-align: center;
@@ -150,11 +150,13 @@ header p {
 .upload-area:hover {
     border-color: var(--accent);
     background: var(--accent-dim);
+    border-style: solid;
 }
 
 .upload-area.drag-over {
     border-color: var(--success);
     background: rgba(16, 185, 129, 0.1);
+    border-style: solid;
 }
 
 .upload-area.has-files {

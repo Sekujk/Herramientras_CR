@@ -23,26 +23,27 @@
     <main class="container">
         <!-- Cortador de Audios -->
         <section id="audio-cutter" class="tool-section active">
-            <h2>Cortador de Audios</h2>
-            <p class="description">Divide archivos de audio largos en segmentos más pequeños. Puedes procesar múltiples archivos simultáneamente.</p>
+            <h2>Cortador de Audios (Procesa Múltiples)</h2>
+            <p class="description">Divide archivos de audio largos en segmentos más cortos. Procesa ilimitados archivos simultáneamente, cada uno con su propia barra de progreso y botón de descarga.</p>
 
             <div class="tool-content">
                 <div class="info-card">
-                    <h3>Cómo usar:</h3>
+                    <h3>Cómo usar (Soporta múltiples archivos):</h3>
                     <ol>
-                        <li>Selecciona uno o más archivos de audio/video</li>
-                        <li>Define la duración de cada segmento</li>
-                        <li>Haz clic en "Procesar"</li>
-                        <li>Descarga cada archivo cuando esté listo (botón de descarga individual)</li>
+                        <li>Selecciona 1, 10, 100+ archivos de audio o video</li>
+                        <li>Define la duración de cada segmento (aplica a todos)</li>
+                        <li>Haz clic en "Procesar" - se procesarán en paralelo</li>
+                        <li>Descarga cada archivo cuando veas su barra al 100% (botón azul)</li>
                     </ol>
-                    <p><strong>Cada archivo:</strong> Se cortará en segmentos y podrás descargarlos como ZIP individual</p>
+                    <p><strong>Cada archivo obtiene:</strong> Su propia barra de progreso, su propio ZIP con segmentos numerados</p>
+                    <p><strong>Velocidad:</strong> Se procesan 2 archivos a la vez (máximo eficiente)</p>
                 </div>
 
                 <div class="upload-area" id="cutter-upload-area">
                     <input type="file" id="audio-file" accept="audio/*,video/*" multiple>
                     <label for="audio-file">
                         <span class="upload-icon">📁</span>
-                        <span>Arrastra archivos de audio o video aquí</span>
+                        <span>Arrastra MÚLTIPLES archivos aquí o haz clic (sin límite)</span>
                     </label>
                 </div>
 
@@ -50,7 +51,7 @@
                     <div class="input-group">
                         <label for="segment-duration">Duración de cada segmento (minutos):</label>
                         <input type="number" id="segment-duration" min="1" max="120" value="10">
-                        <small>Ejemplo: 10 minutos dividirá un audio de 1 hora en 6 segmentos</small>
+                        <small>Se aplica a todos los archivos</small>
                     </div>
                 </div>
 
@@ -67,25 +68,25 @@
 
         <!-- Convertidor de Audio -->
         <section id="audio-converter" class="tool-section">
-            <h2>Convertidor de Audio</h2>
-            <p class="description">Convierte archivos de audio entre diferentes formatos fácilmente</p>
+            <h2>Convertidor de Audio (Procesa Múltiples)</h2>
+            <p class="description">Convierte múltiples archivos entre formatos. Procesa todos simultáneamente con barras individuales.</p>
 
             <div class="tool-content">
                 <div class="info-card">
-                    <h3>Cómo usar:</h3>
+                    <h3>Cómo usar (Múltiples archivos):</h3>
                     <ol>
-                        <li>Selecciona archivos de audio o video (se extraerá el audio automáticamente)</li>
-                        <li>Elige el formato de salida (WAV recomendado para mejor compatibilidad)</li>
-                        <li>Descarga los archivos convertidos</li>
+                        <li>Selecciona varios archivos de audio o video</li>
+                        <li>Elige el formato de salida (WAV sin compresión para mejor calidad)</li>
+                        <li>Haz clic en "Convertir" - cada archivo se procesa con su barra</li>
+                        <li>Descarga cuando esté listo</li>
                     </ol>
-                    <p><strong>Nota:</strong> La conversión se realiza en formato WAV sin compresión para máxima calidad</p>
                 </div>
 
                 <div class="upload-area" id="converter-upload-area">
                     <input type="file" id="converter-file" accept="audio/*,video/*" multiple>
                     <label for="converter-file">
                         <span class="upload-icon">📁</span>
-                        <span>Arrastra archivos de audio o video aquí</span>
+                        <span>Arrastra MÚLTIPLES archivos aquí o haz clic</span>
                     </label>
                 </div>
 
@@ -105,7 +106,7 @@
 
                 <div id="converter-file-list" class="file-list" style="display: none;"></div>
 
-                <button id="convert-audio-btn" class="action-btn" style="display: none;">Convertir Audio</button>
+                <button id="convert-audio-btn" class="action-btn" style="display: none;">Convertir archivos</button>
 
                 <div id="converter-progress" class="progress-container" style="display: none;">
                 </div>
@@ -114,26 +115,26 @@
 
         <!-- Extractor de Audio de Video -->
         <section id="video-extractor" class="tool-section">
-            <h2>Extractor de Audio de Video</h2>
-            <p class="description">Extrae la pista de audio de archivos de video para escuchar sin necesidad del video</p>
+            <h2>Extractor de Audio (Procesa Múltiples Videos)</h2>
+            <p class="description">Extrae el audio de múltiples videos simultáneamente. Cada video obtiene su barra de progreso.</p>
 
             <div class="tool-content">
                 <div class="info-card">
-                    <h3>Cómo usar:</h3>
+                    <h3>Cómo usar (Múltiples videos):</h3>
                     <ol>
-                        <li>Selecciona uno o más archivos de video (clases grabadas, conferencias, tutoriales)</li>
+                        <li>Selecciona varios videos (clases, conferencias, tutoriales)</li>
                         <li>Elige el formato de audio deseado</li>
-                        <li>El audio se extraerá y descargará automáticamente</li>
+                        <li>Haz clic en "Extraer" - se procesan todos en paralelo</li>
+                        <li>Descarga cada audio cuando esté listo</li>
                     </ol>
-                    <p><strong>Formatos de video soportados:</strong> MP4, AVI, MOV, MKV, WEBM</p>
-                    <p><strong>Tip:</strong> Útil para escuchar clases mientras haces otras actividades</p>
+                    <p><strong>Útil para:</strong> Escuchar clases mientras estudias, haces deporte, etc.</p>
                 </div>
 
                 <div class="upload-area" id="video-upload-area">
                     <input type="file" id="video-file" accept="video/*" multiple>
                     <label for="video-file">
-                        <span class="upload-icon">🎥</span>
-                        <span>Arrastra videos aquí o haz clic para seleccionar</span>
+                        <span class="upload-icon">📁</span>
+                        <span>Arrastra MÚLTIPLES videos aquí o haz clic</span>
                     </label>
                 </div>
 
@@ -152,7 +153,7 @@
 
                 <div id="extractor-file-list" class="file-list" style="display: none;"></div>
 
-                <button id="extract-audio-btn" class="action-btn" style="display: none;">Extraer Audio</button>
+                <button id="extract-audio-btn" class="action-btn" style="display: none;">Extraer audios</button>
 
                 <div id="extractor-progress" class="progress-container" style="display: none;">
                 </div>
