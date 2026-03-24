@@ -273,9 +273,10 @@ function initAudioCutter() {
             const filePromises = selectedFiles.map(file => async () => {
                 const fileName = file.name.replace(/\.[^/.]+$/, "");
                 const progressId = progressIds[file.name];
+                let progressContainer; // Declarar fuera del try para que esté disponible en catch
 
                 try {
-                    const progressContainer = document.getElementById(progressId);
+                    progressContainer = document.getElementById(progressId);
                     updateProgressById(progressContainer, `Cargando ${file.name}...`, 10);
 
                     let audioBuffer;
