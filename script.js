@@ -1324,7 +1324,7 @@ async function bufferToWebM(audioBuffer) {
     return new Promise((resolve, reject) => {
         try {
             const audioCtx = new AudioContext();
-            const destination = audioCtx.createMediaStreamAudioDestinationNode();
+            const destination = audioCtx.createMediaStreamDestination();
 
             // Crear buffer source y conectar
             const bufferSource = audioCtx.createBufferSource();
