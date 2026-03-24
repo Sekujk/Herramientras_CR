@@ -1,4 +1,6 @@
 // ==================== NAVEGACIÓN ENTRE HERRAMIENTAS ====================
+const progressThrottle = {}; // Para throttle de actualizaciones de progreso
+
 document.addEventListener('DOMContentLoaded', () => {
     const navBtns = document.querySelectorAll('.nav-btn');
     const toolSections = document.querySelectorAll('.tool-section');
@@ -1082,11 +1084,33 @@ function bufferToWave(audioBuffer) {
 }
 
 function updateProgress(progressContainer, text, percentage) {
+    const id = progressContainer.id || 'unknown';
+
+    // Throttle: no actualizar si pasó menos de 50ms desde la última actualización
+    if (progressThrottle[id] && Date.now() - progressThrottle[id].lastUpdate < 50) {
+        return;
+    }
+
     const progressBar = progressContainer.querySelector('.progress-fill');
     const progressText = progressContainer.querySelector('.progress-text');
 
-    progressBar.style.width = percentage + '%';
-    progressText.textContent = text;
+    const roundedPercentage = Math.round(percentage);
+
+    // Solo actualizar si hubo cambio significativo
+    if (progressThrottle[id]?.lastPercentage !== roundedPercentage || progressThrottle[id]?.lastText !== text) {
+        if (progressBar) {
+            progressBar.style.width = roundedPercentage + '%';
+        }
+        if (progressText) {
+            progressText.textContent = text;
+        }
+
+        progressThrottle[id] = {
+            lastUpdate: Date.now(),
+            lastPercentage: roundedPercentage,
+            lastText: text
+        };
+    }
 }
 
 function downloadFile(blob, filename) {
