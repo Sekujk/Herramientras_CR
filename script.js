@@ -1,5 +1,15 @@
 // ==================== NAVEGACIÓN ENTRE HERRAMIENTAS ====================
 const progressThrottle = {}; // Para throttle de actualizaciones de progreso
+let isProcessing = false; // Rastrear si hay procesamiento en curso
+
+// Aviso antes de cerrar si hay procesamiento
+window.addEventListener('beforeunload', (event) => {
+    if (isProcessing) {
+        event.preventDefault();
+        event.returnValue = '';
+        return '';
+    }
+});
 
 // Función para ejecutar promesas con concurrencia limitada
 async function promiseLimit(promises, concurrency = 6) {
@@ -169,6 +179,8 @@ function initAudioCutter() {
         if (selectedFiles.length === 0) {
             fileList.style.display = 'none';
             uploadArea.classList.remove('has-files');
+            cutterProgress.innerHTML = '';
+            cutterProgress.style.display = 'none';
             if (uploadLabel) {
                 uploadLabel.textContent = 'Arrastra MÚLTIPLES archivos aquí o haz clic (sin límite)';
                 uploadLabel.style.color = 'var(--text-dim)';
@@ -246,6 +258,7 @@ function initAudioCutter() {
         cutterProgress.innerHTML = ''; // Limpiar barras previas
         cutterProgress.style.display = 'block';
         cutAudioBtn.disabled = true;
+        isProcessing = true;
 
         try {
             const progressIds = {};
@@ -355,6 +368,7 @@ function initAudioCutter() {
 
             setTimeout(() => {
                 cutAudioBtn.disabled = false;
+                isProcessing = false;
             }, 500);
 
         } catch (error) {
@@ -364,6 +378,7 @@ function initAudioCutter() {
             cutterInfo.style.display = 'block';
             cutterProgress.style.display = 'none';
             cutAudioBtn.disabled = false;
+            isProcessing = false;
         }
     });
 }
@@ -397,6 +412,8 @@ function initAudioConverter() {
         if (converterFiles.length === 0) {
             fileList.style.display = 'none';
             uploadArea.classList.remove('has-files');
+            converterProgress.innerHTML = '';
+            converterProgress.style.display = 'none';
             if (uploadLabel) {
                 uploadLabel.textContent = 'Arrastra MÚLTIPLES archivos aquí o haz clic';
                 uploadLabel.style.color = 'var(--text-dim)';
@@ -473,6 +490,7 @@ function initAudioConverter() {
 
         converterProgress.style.display = 'block';
         convertAudioBtn.disabled = true;
+        isProcessing = true;
 
         try {
             if (converterFiles.length === 1) {
@@ -515,6 +533,7 @@ function initAudioConverter() {
             setTimeout(() => {
                 converterProgress.style.display = 'none';
                 convertAudioBtn.disabled = false;
+                isProcessing = false;
             }, 500);
 
         } catch (error) {
@@ -523,6 +542,7 @@ function initAudioConverter() {
             converterInfo.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
             converterProgress.style.display = 'none';
             convertAudioBtn.disabled = false;
+            isProcessing = false;
         }
     });
 }
@@ -586,6 +606,8 @@ function initVideoExtractor() {
         if (videoFiles.length === 0) {
             fileList.style.display = 'none';
             uploadArea.classList.remove('has-files');
+            extractorProgress.innerHTML = '';
+            extractorProgress.style.display = 'none';
             if (uploadLabel) {
                 uploadLabel.textContent = 'Arrastra MÚLTIPLES videos aquí o haz clic';
                 uploadLabel.style.color = 'var(--text-dim)';
@@ -657,6 +679,7 @@ function initVideoExtractor() {
 
         extractorProgress.style.display = 'block';
         extractAudioBtn.disabled = true;
+        isProcessing = true;
 
         try {
             if (videoFiles.length === 1) {
@@ -704,6 +727,7 @@ function initVideoExtractor() {
             setTimeout(() => {
                 extractorProgress.style.display = 'none';
                 extractAudioBtn.disabled = false;
+                isProcessing = false;
             }, 500);
 
         } catch (error) {
@@ -712,6 +736,7 @@ function initVideoExtractor() {
             extractorInfo.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
             extractorProgress.style.display = 'none';
             extractAudioBtn.disabled = false;
+            isProcessing = false;
         }
     });
 }
