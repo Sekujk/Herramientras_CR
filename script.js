@@ -23,16 +23,23 @@ async function promiseLimit(promises, concurrency = 2) {
     return Promise.all(results);
 }
 
-// Crear barra de progreso dinámica
+// Almacenamiento de blobs completados para descarga
+const fileBlobs = {};
+
+// Crear barra de progreso dinámica con botón de descarga
 function createProgressBar(containerId, fileName) {
     const container = document.getElementById(containerId);
     const progressId = `progress-${Date.now()}-${Math.random()}`;
+    const downloadId = `download-${progressId}`;
 
     const progressDiv = document.createElement('div');
     progressDiv.className = 'progress-item';
     progressDiv.id = progressId;
     progressDiv.innerHTML = `
-        <div style="font-size: 0.9rem; color: var(--text); margin-bottom: 0.5rem; word-break: break-word;">${fileName}</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div style="font-size: 0.9rem; color: var(--text); word-break: break-word; flex: 1;">${fileName}</div>
+            <button id="${downloadId}" class="download-btn" disabled>Descargar</button>
+        </div>
         <div class="progress-bar">
             <div class="progress-fill"></div>
         </div>
@@ -40,6 +47,15 @@ function createProgressBar(containerId, fileName) {
     `;
 
     container.appendChild(progressDiv);
+
+    // Guardar referencias para descarga
+    fileBlobs[progressId] = {
+        downloadId,
+        fileName,
+        blob: null,
+        ready: false
+    };
+
     return progressId;
 }
 
@@ -179,7 +195,6 @@ function initAudioCutter() {
         cutAudioBtn.disabled = true;
 
         try {
-            const zip = new JSZip();
             const progressIds = {};
 
             // Crear barras de progreso para cada archivo
@@ -218,6 +233,9 @@ function initAudioCutter() {
                     const duration = audioBuffer.duration;
                     const numSegments = Math.ceil(duration / segmentDuration);
 
+                    // Crear un ZIP por archivo
+                    const zip = new JSZip();
+
                     for (let i = 0; i < numSegments; i++) {
                         const startTime = i * segmentDuration;
                         const endTime = Math.min((i + 1) * segmentDuration, duration);
@@ -252,7 +270,23 @@ function initAudioCutter() {
                         updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
                     }
 
+                    // Generar ZIP
+                    updateProgressById(progressContainer, 'Generando ZIP...', 95);
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+
                     updateProgressById(progressContainer, 'Completado', 100);
+
+                    // Guardar blob y activar botón
+                    fileBlobs[progressId].blob = zipBlob;
+                    fileBlobs[progressId].ready = true;
+                    const downloadBtn = document.getElementById(fileBlobs[progressId].downloadId);
+                    if (downloadBtn) {
+                        downloadBtn.disabled = false;
+                        downloadBtn.addEventListener('click', () => {
+                            downloadFile(zipBlob, `${fileName}-cortado.zip`);
+                        });
+                    }
+
                     return { success: true, file: file.name };
                 } catch (error) {
                     updateProgressById(progressContainer, `Error: ${error.message}`, 0);
@@ -262,21 +296,11 @@ function initAudioCutter() {
 
             await promiseLimit(filePromises, 2);
 
-            updateProgressById(document.querySelector('.progress-item'), 'Generando ZIP...', 95);
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-
             cutterInfo.className = 'info-box success';
-            cutterInfo.innerHTML = '<p><strong>Todos los audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+            cutterInfo.innerHTML = '<p><strong>Archivos procesados</strong></p><p>Haz clic en el botón de descarga para obtener tu archivo</p>';
             cutterInfo.style.display = 'block';
 
-            const downloadLink = document.createElement('a');
-            downloadLink.href = URL.createObjectURL(zipBlob);
-            downloadLink.download = `audios-cortados-${Date.now()}.zip`;
-            downloadLink.click();
-
             setTimeout(() => {
-                URL.revokeObjectURL(downloadLink.href);
-                cutterProgress.style.display = 'none';
                 cutAudioBtn.disabled = false;
             }, 500);
 

@@ -24,17 +24,18 @@
         <!-- Cortador de Audios -->
         <section id="audio-cutter" class="tool-section active">
             <h2>Cortador de Audios</h2>
-            <p class="description">Divide archivos de audio largos en segmentos más pequeños y descárgalos en un ZIP</p>
+            <p class="description">Divide archivos de audio largos en segmentos más pequeños. Puedes procesar múltiples archivos simultáneamente.</p>
 
             <div class="tool-content">
                 <div class="info-card">
                     <h3>Cómo usar:</h3>
                     <ol>
-                        <li>Selecciona archivos de audio O video (se extraerá el audio automáticamente)</li>
-                        <li>Define la duración deseada de cada segmento</li>
-                        <li>Descarga el ZIP con todos los segmentos nombrados como: <code>nombre-1.wav</code>, <code>nombre-2.wav</code>, etc.</li>
+                        <li>Selecciona uno o más archivos de audio/video</li>
+                        <li>Define la duración de cada segmento</li>
+                        <li>Haz clic en "Procesar"</li>
+                        <li>Descarga cada archivo cuando esté listo (botón de descarga individual)</li>
                     </ol>
-                    <p><strong>Formatos soportados:</strong> MP3, WAV, OGG, M4A, FLAC, MP4, AVI, MOV, MKV, WEBM</p>
+                    <p><strong>Cada archivo:</strong> Se cortará en segmentos y podrás descargarlos como ZIP individual</p>
                 </div>
 
                 <div class="upload-area" id="cutter-upload-area">
@@ -57,7 +58,7 @@
 
                 <div id="cutter-file-list" class="file-list" style="display: none;"></div>
 
-                <button id="cut-audio-btn" class="action-btn" style="display: none;">Cortar y Descargar ZIP</button>
+                <button id="cut-audio-btn" class="action-btn" style="display: none;">Procesar archivos</button>
 
                 <div id="cutter-progress" class="progress-container" style="display: none;">
                 </div>

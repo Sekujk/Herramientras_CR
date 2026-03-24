@@ -350,6 +350,34 @@ header p {
     border-color: var(--danger);
 }
 
+.download-btn {
+    padding: 0.5rem 1rem;
+    background: #555;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: not-allowed;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.download-btn:not(:disabled) {
+    background: var(--accent);
+    cursor: pointer;
+}
+
+.download-btn:not(:disabled):hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+
+.download-btn:not(:disabled):active {
+    transform: translateY(0);
+}
+
 .info-box {
     padding: 1rem 1.25rem;
     background: var(--accent-dim);
