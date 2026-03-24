@@ -372,6 +372,7 @@ function initAudioCutter() {
 function initAudioConverter() {
     const converterFileInput = document.getElementById('converter-file');
     const convertAudioBtn = document.getElementById('convert-audio-btn');
+    const converterClearBtn = document.getElementById('converter-clear-btn');
     const outputFormatSelect = document.getElementById('output-format');
     const converterInfo = document.getElementById('converter-info');
     const converterProgress = document.getElementById('converter-progress');
@@ -381,32 +382,88 @@ function initAudioConverter() {
 
     let converterFiles = [];
 
-    converterFileInput.addEventListener('change', (e) => {
-        converterFiles = Array.from(e.target.files);
-        if (converterFiles.length > 0) {
-            const audioFiles = converterFiles.filter(f => f.type.startsWith('audio/')).length;
-            const videoFiles = converterFiles.filter(f => f.type.startsWith('video/')).length;
+    function removeFile(index) {
+        converterFiles.splice(index, 1);
+        updateFileDisplay();
+    }
 
-            // Actualizar el label y área de upload
+    function clearAllFiles() {
+        converterFiles = [];
+        converterFileInput.value = '';
+        updateFileDisplay();
+    }
+
+    function updateFileDisplay() {
+        if (converterFiles.length === 0) {
+            fileList.style.display = 'none';
+            uploadArea.classList.remove('has-files');
             if (uploadLabel) {
-                uploadLabel.textContent = `${converterFiles.length} archivo(s) seleccionado(s)`;
-                uploadLabel.style.color = 'var(--accent)';
+                uploadLabel.textContent = 'Arrastra MÚLTIPLES archivos aquí o haz clic';
+                uploadLabel.style.color = 'var(--text-dim)';
             }
-            uploadArea.classList.add('has-files');
-
-            converterInfo.style.display = 'block';
-            converterInfo.className = 'info-box';
-            converterInfo.innerHTML = `
-                <p><strong>${converterFiles.length}</strong> archivo(s) seleccionado(s) para convertir</p>
-                ${videoFiles > 0 ? `<p>${videoFiles} video(s) - se extraerá el audio primero</p>` : ''}
-                ${audioFiles > 0 ? `<p>${audioFiles} audio(s)</p>` : ''}
-            `;
-
-            // Mostrar lista de archivos
-            displayFileList(converterFiles, fileList);
-
-            convertAudioBtn.style.display = 'block';
+            converterInfo.style.display = 'none';
+            convertAudioBtn.style.display = 'none';
+            converterClearBtn.style.display = 'none';
+            return;
         }
+
+        fileList.style.display = 'block';
+        uploadArea.classList.add('has-files');
+        converterClearBtn.style.display = 'inline-block';
+
+        const totalSize = converterFiles.reduce((acc, file) => acc + file.size, 0);
+        const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+        const audioFiles = converterFiles.filter(f => f.type.startsWith('audio/')).length;
+        const videoFiles = converterFiles.filter(f => f.type.startsWith('video/')).length;
+
+        if (uploadLabel) {
+            uploadLabel.textContent = `${converterFiles.length} archivo(s) seleccionado(s)`;
+            uploadLabel.style.color = 'var(--accent)';
+        }
+
+        converterInfo.style.display = 'block';
+        converterInfo.className = 'info-box';
+        converterInfo.innerHTML = `
+            <p><strong>${converterFiles.length}</strong> archivo(s) seleccionado(s) para convertir</p>
+            ${videoFiles > 0 ? `<p>${videoFiles} video(s) - se extraerá el audio primero</p>` : ''}
+            ${audioFiles > 0 ? `<p>${audioFiles} audio(s)</p>` : ''}
+            <p>Tamaño total: <strong>${sizeMB} MB</strong></p>
+        `;
+
+        fileList.innerHTML = '';
+        converterFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const isVideo = file.type.startsWith('video/');
+            const isAudio = file.type.startsWith('audio/');
+            const icon = isVideo ? 'V' : isAudio ? 'A' : 'F';
+            const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">${icon}</span>
+                    <div class="file-details">
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-meta">${fileSize} MB</span>
+                    </div>
+                </div>
+                <button class="remove-file-btn" onclick="window.converterRemoveFile(${index})" title="Eliminar archivo">✕</button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+
+        convertAudioBtn.style.display = 'block';
+    }
+
+    window.converterRemoveFile = removeFile;
+    window.converterClearAll = clearAllFiles;
+
+    converterFileInput.addEventListener('change', (e) => {
+        const newFiles = Array.from(e.target.files);
+        converterFiles = converterFiles.concat(newFiles);
+        converterFileInput.value = '';
+        updateFileDisplay();
     });
 
     convertAudioBtn.addEventListener('click', async () => {
@@ -504,6 +561,7 @@ async function convertAudioFormat(file, targetFormat, progressContainer) {
 function initVideoExtractor() {
     const videoFileInput = document.getElementById('video-file');
     const extractAudioBtn = document.getElementById('extract-audio-btn');
+    const extractorClearBtn = document.getElementById('extractor-clear-btn');
     const extractFormatSelect = document.getElementById('extract-format');
     const extractorInfo = document.getElementById('extractor-info');
     const extractorProgress = document.getElementById('extractor-progress');
@@ -513,25 +571,83 @@ function initVideoExtractor() {
 
     let videoFiles = [];
 
-    videoFileInput.addEventListener('change', (e) => {
-        videoFiles = Array.from(e.target.files);
-        if (videoFiles.length > 0) {
-            // Actualizar el label y área de upload
+    function removeFile(index) {
+        videoFiles.splice(index, 1);
+        updateFileDisplay();
+    }
+
+    function clearAllFiles() {
+        videoFiles = [];
+        videoFileInput.value = '';
+        updateFileDisplay();
+    }
+
+    function updateFileDisplay() {
+        if (videoFiles.length === 0) {
+            fileList.style.display = 'none';
+            uploadArea.classList.remove('has-files');
             if (uploadLabel) {
-                uploadLabel.textContent = `${videoFiles.length} video(s) seleccionado(s)`;
-                uploadLabel.style.color = 'var(--accent)';
+                uploadLabel.textContent = 'Arrastra MÚLTIPLES videos aquí o haz clic';
+                uploadLabel.style.color = 'var(--text-dim)';
             }
-            uploadArea.classList.add('has-files');
-
-            extractorInfo.style.display = 'block';
-            extractorInfo.className = 'info-box';
-            extractorInfo.innerHTML = `<p><strong>${videoFiles.length}</strong> video(s) seleccionado(s)</p>`;
-
-            // Mostrar lista de archivos
-            displayFileList(videoFiles, fileList);
-
-            extractAudioBtn.style.display = 'block';
+            extractorInfo.style.display = 'none';
+            extractAudioBtn.style.display = 'none';
+            extractorClearBtn.style.display = 'none';
+            return;
         }
+
+        fileList.style.display = 'block';
+        uploadArea.classList.add('has-files');
+        extractorClearBtn.style.display = 'inline-block';
+
+        const totalSize = videoFiles.reduce((acc, file) => acc + file.size, 0);
+        const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+
+        if (uploadLabel) {
+            uploadLabel.textContent = `${videoFiles.length} video(s) seleccionado(s)`;
+            uploadLabel.style.color = 'var(--accent)';
+        }
+
+        extractorInfo.style.display = 'block';
+        extractorInfo.className = 'info-box';
+        extractorInfo.innerHTML = `
+            <p><strong>${videoFiles.length}</strong> video(s) seleccionado(s)</p>
+            <p>Tamaño total: <strong>${sizeMB} MB</strong></p>
+        `;
+
+        fileList.innerHTML = '';
+        videoFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const isVideo = file.type.startsWith('video/');
+            const icon = isVideo ? 'V' : 'F';
+            const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">${icon}</span>
+                    <div class="file-details">
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-meta">${fileSize} MB</span>
+                    </div>
+                </div>
+                <button class="remove-file-btn" onclick="window.extractorRemoveFile(${index})" title="Eliminar archivo">✕</button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+
+        extractAudioBtn.style.display = 'block';
+    }
+
+    window.extractorRemoveFile = removeFile;
+    window.extractorClearAll = clearAllFiles;
+
+    videoFileInput.addEventListener('change', (e) => {
+        const newFiles = Array.from(e.target.files);
+        videoFiles = videoFiles.concat(newFiles);
+        videoFileInput.value = '';
+        updateFileDisplay();
     });
 
     extractAudioBtn.addEventListener('click', async () => {
