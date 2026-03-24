@@ -330,8 +330,8 @@ function initAudioCutter() {
                             }
                         }
 
-                        const wavBlob = bufferToWave(segmentBuffer);
-                        zip.file(`${fileName}-${i + 1}.wav`, wavBlob);
+                        const mp3Blob = await bufferToWave(segmentBuffer);
+                        zip.file(`${fileName}-${i + 1}.mp3`, mp3Blob);
 
                         const progress = 50 + (i / numSegments) * 40;
                         updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
@@ -569,7 +569,7 @@ async function convertAudioFormat(file, targetFormat, progressContainer) {
             const arrayBuffer = await audioBlob.arrayBuffer();
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            return bufferToWave(audioBuffer);
+            return await bufferToWave(audioBuffer);
         }
 
         // Si es audio, procesar directamente
@@ -580,7 +580,7 @@ async function convertAudioFormat(file, targetFormat, progressContainer) {
         const arrayBuffer = await file.arrayBuffer();
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        return bufferToWave(audioBuffer);
+        return await bufferToWave(audioBuffer);
     } catch (error) {
         console.error('Error in convertAudioFormat:', error);
         throw error;
@@ -1320,94 +1320,94 @@ function createForestNoise(audioContext) {
 
 // ==================== FUNCIONES AUXILIARES ====================
 // Convertir AudioBuffer a MP3 usando lamejs (reduce tamaño 10x)
-// Convertir AudioBuffer a WAV con samplerate reducido (22050Hz)
-// Simple, rápido, confiable - funciona garantizado
-function bufferToWAV(audioBuffer) {
+// Convertir AudioBuffer a MP3 con lamejs (chunks async - no lagea)
+async function bufferToWAV(audioBuffer) {
     const targetSampleRate = 22050;
     const numOfChannels = audioBuffer.numberOfChannels;
-    const format = 1;
-    const bitDepth = 16;
-    const bytesPerSample = bitDepth / 8;
-    const blockAlign = numOfChannels * bytesPerSample;
+    const kbps = 128;
 
-    // Resamplear a 22050Hz
-    let audioData;
+    // Resamplear primero
+    let audioData = [];
     const ratio = targetSampleRate / audioBuffer.sampleRate;
 
-    if (Math.abs(ratio - 1) < 0.001) {
-        // Ya está a 22050Hz
-        audioData = new Float32Array(audioBuffer.length * numOfChannels);
-        for (let channel = 0; channel < numOfChannels; channel++) {
-            const channelData = audioBuffer.getChannelData(channel);
-            for (let i = 0; i < audioBuffer.length; i++) {
-                audioData[i * numOfChannels + channel] = channelData[i];
-            }
-        }
-    } else {
-        // Resamplear con interpolación
+    for (let channel = 0; channel < numOfChannels; channel++) {
+        const channelData = audioBuffer.getChannelData(channel);
         const newLength = Math.floor(audioBuffer.length * ratio);
-        audioData = new Float32Array(newLength * numOfChannels);
+        const resampled = new Float32Array(newLength);
 
-        for (let channel = 0; channel < numOfChannels; channel++) {
-            const channelData = audioBuffer.getChannelData(channel);
-            for (let i = 0; i < newLength; i++) {
-                const srcIndex = i / ratio;
-                const srcIndexFloor = Math.floor(srcIndex);
-                const srcIndexCeil = Math.ceil(srcIndex);
-                const blend = srcIndex - srcIndexFloor;
+        for (let i = 0; i < newLength; i++) {
+            const srcIndex = i / ratio;
+            const srcIndexFloor = Math.floor(srcIndex);
+            const srcIndexCeil = Math.ceil(srcIndex);
+            const blend = srcIndex - srcIndexFloor;
 
-                const sample1 = channelData[srcIndexFloor] || 0;
-                const sample2 = channelData[srcIndexCeil] || 0;
-                const blended = sample1 * (1 - blend) + sample2 * blend;
+            const sample1 = channelData[srcIndexFloor] || 0;
+            const sample2 = channelData[srcIndexCeil] || 0;
+            resampled[i] = sample1 * (1 - blend) + sample2 * blend;
+        }
+        audioData.push(resampled);
+    }
 
-                audioData[i * numOfChannels + channel] = blended;
+    if (!window.lamejs) {
+        throw new Error('lamejs no cargada');
+    }
+
+    const encoder = new window.lamejs.Mp3Encoder(numOfChannels, targetSampleRate, kbps);
+    const mp3Data = [];
+    const chunkSize = 1152;
+    const totalLength = audioData[0].length;
+
+    // Procesar con chunks pequeños y delays
+    return new Promise((resolve, reject) => {
+        let processed = 0;
+
+        const processNextChunk = async () => {
+            try {
+                // Procesar 2 chunks por iteración
+                for (let batch = 0; batch < 2 && processed < totalLength; batch++) {
+                    const i = processed;
+                    let left = audioData[0].subarray(i, Math.min(i + chunkSize, totalLength));
+                    let right = numOfChannels > 1 ? audioData[1].subarray(i, Math.min(i + chunkSize, totalLength)) : left;
+
+                    const int16Left = [];
+                    const int16Right = [];
+
+                    for (let j = 0; j < left.length; j++) {
+                        int16Left[j] = Math.max(-1, Math.min(1, left[j])) < 0 ? left[j] * 0x8000 : left[j] * 0x7FFF;
+                        int16Right[j] = Math.max(-1, Math.min(1, right[j])) < 0 ? right[j] * 0x8000 : right[j] * 0x7FFF;
+                    }
+
+                    const chunk = encoder.encodeBuffer(int16Left, int16Right);
+                    if (chunk.length > 0) {
+                        mp3Data.push(chunk);
+                    }
+
+                    processed += chunkSize;
+                }
+
+                if (processed >= totalLength) {
+                    // Finalizar
+                    const finalChunk = encoder.flush();
+                    if (finalChunk.length > 0) {
+                        mp3Data.push(finalChunk);
+                    }
+
+                    const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                    resolve(mp3Blob);
+                } else {
+                    // Siguiente batch después de breve delay
+                    setTimeout(processNextChunk, 10);
+                }
+            } catch (error) {
+                reject(error);
             }
-        }
-    }
+        };
 
-    const dataLength = audioData.length * bytesPerSample;
-    const buffer = new ArrayBuffer(44 + dataLength);
-    const view = new DataView(buffer);
-
-    const writeString = (offset, string) => {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    };
-
-    const writeUint32 = (offset, value) => {
-        view.setUint32(offset, value, true);
-    };
-
-    const writeUint16 = (offset, value) => {
-        view.setUint16(offset, value, true);
-    };
-
-    // WAV header
-    writeString(0, 'RIFF');
-    writeUint32(4, 36 + dataLength);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    writeUint32(16, 16);
-    writeUint16(20, format);
-    writeUint16(22, numOfChannels);
-    writeUint32(24, targetSampleRate);
-    writeUint32(28, targetSampleRate * blockAlign);
-    writeUint16(32, blockAlign);
-    writeUint16(34, bitDepth);
-    writeString(36, 'data');
-    writeUint32(40, dataLength);
-
-    // Convertir Float32 a PCM 16-bit
-    const converted = new Int16Array(buffer, 44);
-    for (let i = 0; i < audioData.length; i++) {
-        converted[i] = Math.max(-1, Math.min(1, audioData[i])) < 0 ? audioData[i] * 0x8000 : audioData[i] * 0x7FFF;
-    }
-
-    return new Blob([buffer], { type: 'audio/wav' });
+        processNextChunk();
+    });
 }
 
-// Alias para compatibilidad (bufferToWAV es synchronous)
+// Alias para compatibilidad (bufferToWAV es async)
 function bufferToWave(audioBuffer) {
     return bufferToWAV(audioBuffer);
 }
