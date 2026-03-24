@@ -2,7 +2,7 @@
 const progressThrottle = {}; // Para throttle de actualizaciones de progreso
 
 // Función para ejecutar promesas con concurrencia limitada
-async function promiseLimit(promises, concurrency = 2) {
+async function promiseLimit(promises, concurrency = 6) {
     const results = [];
     const executing = [];
 
@@ -294,7 +294,7 @@ function initAudioCutter() {
                 }
             });
 
-            await promiseLimit(filePromises, 2);
+            await promiseLimit(filePromises, 6);
 
             cutterInfo.className = 'info-box success';
             cutterInfo.innerHTML = '<p><strong>Archivos procesados</strong></p><p>Haz clic en el botón de descarga para obtener tu archivo</p>';
