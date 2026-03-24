@@ -165,29 +165,34 @@ header p {
 }
 
 .file-list {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
-    max-height: 200px;
-    overflow-y: auto;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 1rem 0;
+    max-height: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .file-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background: rgba(255, 255, 255, 0.01);
-    border-radius: 6px;
-    border: 1px solid var(--border);
+    padding: 1.25rem;
+    margin-bottom: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 2px solid var(--border);
     transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .file-item:hover {
     background: var(--accent-dim);
     border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .file-item:last-child {
