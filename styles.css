@@ -426,6 +426,16 @@ header p {
     animation: slideIn 0.3s ease;
 }
 
+.progress-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
 @keyframes slideIn {
     from {
         opacity: 0;

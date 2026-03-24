@@ -1,6 +1,48 @@
 // ==================== NAVEGACIÓN ENTRE HERRAMIENTAS ====================
 const progressThrottle = {}; // Para throttle de actualizaciones de progreso
 
+// Función para ejecutar promesas con concurrencia limitada
+async function promiseLimit(promises, concurrency = 2) {
+    const results = [];
+    const executing = [];
+
+    for (let i = 0; i < promises.length; i++) {
+        const promise = promises[i]().then(result => {
+            executing.splice(executing.indexOf(promise), 1);
+            return result;
+        });
+
+        results.push(promise);
+        executing.push(promise);
+
+        if (executing.length >= concurrency) {
+            await Promise.race(executing);
+        }
+    }
+
+    return Promise.all(results);
+}
+
+// Crear barra de progreso dinámica
+function createProgressBar(containerId, fileName) {
+    const container = document.getElementById(containerId);
+    const progressId = `progress-${Date.now()}-${Math.random()}`;
+
+    const progressDiv = document.createElement('div');
+    progressDiv.className = 'progress-item';
+    progressDiv.id = progressId;
+    progressDiv.innerHTML = `
+        <div style="font-size: 0.9rem; color: var(--text); margin-bottom: 0.5rem; word-break: break-word;">${fileName}</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+        <p class="progress-text">Iniciando...</p>
+    `;
+
+    container.appendChild(progressDiv);
+    return progressId;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const navBtns = document.querySelectorAll('.nav-btn');
     const toolSections = document.querySelectorAll('.tool-section');
@@ -130,83 +172,102 @@ function initAudioCutter() {
     cutAudioBtn.addEventListener('click', async () => {
         if (selectedFiles.length === 0) return;
 
-        const segmentDuration = parseInt(segmentDurationInput.value) * 60; // Convertir a segundos
+        const segmentDuration = parseInt(segmentDurationInput.value) * 60;
 
+        cutterProgress.innerHTML = ''; // Limpiar barras previas
         cutterProgress.style.display = 'block';
         cutAudioBtn.disabled = true;
 
         try {
             const zip = new JSZip();
+            const progressIds = {};
 
-            for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex++) {
-                const file = selectedFiles[fileIndex];
-                const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remover extensión
-
-                updateProgress(cutterProgress, `Procesando ${file.name}...`, (fileIndex / selectedFiles.length) * 100);
-
-                let audioBuffer;
-
-                // Detectar si es video y extraer audio primero
-                if (file.type.startsWith('video/')) {
-                    const baseProgress = (fileIndex / selectedFiles.length) * 100;
-                    const audioBlob = await extractAudioFromVideo(file, (videoProgress, message) => {
-                        const totalProgress = baseProgress + (videoProgress / selectedFiles.length);
-                        updateProgress(cutterProgress, message, totalProgress);
-                    });
-                    const arrayBuffer = await audioBlob.arrayBuffer();
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                } else {
-                    // Es audio, procesar directamente
-                    const arrayBuffer = await file.arrayBuffer();
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                }
-
-                const duration = audioBuffer.duration;
-                const numSegments = Math.ceil(duration / segmentDuration);
-
-                for (let i = 0; i < numSegments; i++) {
-                    const startTime = i * segmentDuration;
-                    const endTime = Math.min((i + 1) * segmentDuration, duration);
-                    const segmentLength = endTime - startTime;
-
-                    const segmentBuffer = audioBuffer.constructor === AudioBuffer
-                        ? new AudioBuffer({
-                            numberOfChannels: audioBuffer.numberOfChannels,
-                            length: segmentLength * audioBuffer.sampleRate,
-                            sampleRate: audioBuffer.sampleRate
-                        })
-                        : audioBuffer.context.createBuffer(
-                            audioBuffer.numberOfChannels,
-                            segmentLength * audioBuffer.sampleRate,
-                            audioBuffer.sampleRate
-                        );
-
-                    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-                        const channelData = audioBuffer.getChannelData(channel);
-                        const segmentData = segmentBuffer.getChannelData(channel);
-                        const startSample = Math.floor(startTime * audioBuffer.sampleRate);
-
-                        for (let j = 0; j < segmentData.length; j++) {
-                            segmentData[j] = channelData[startSample + j];
-                        }
-                    }
-
-                    const wavBlob = bufferToWave(segmentBuffer);
-                    zip.file(`${fileName}-${i + 1}.wav`, wavBlob);
-
-                    updateProgress(cutterProgress, `Cortando segmento ${i + 1}/${numSegments} de ${file.name}...`,
-                        ((fileIndex + (i + 1) / numSegments) / selectedFiles.length) * 100);
-                }
+            // Crear barras de progreso para cada archivo
+            for (const file of selectedFiles) {
+                const progressId = createProgressBar('cutter-progress', file.name);
+                progressIds[file.name] = progressId;
             }
 
-            updateProgress(cutterProgress, 'Generando archivo ZIP...', 95);
+            // Procesar archivos en paralelo (máximo 2 simultáneamente)
+            const filePromises = selectedFiles.map(file => async () => {
+                const fileName = file.name.replace(/\.[^/.]+$/, "");
+                const progressId = progressIds[file.name];
+
+                try {
+                    const progressContainer = document.getElementById(progressId);
+                    updateProgressById(progressContainer, `Cargando ${file.name}...`, 10);
+
+                    let audioBuffer;
+
+                    // Detectar si es video y extraer audio
+                    if (file.type.startsWith('video/')) {
+                        const audioBlob = await extractAudioFromVideo(file, (videoProgress, message) => {
+                            updateProgressById(progressContainer, message, videoProgress * 0.5);
+                        });
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    } else {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    }
+
+                    updateProgressById(progressContainer, `Cortando ${file.name}...`, 50);
+
+                    const duration = audioBuffer.duration;
+                    const numSegments = Math.ceil(duration / segmentDuration);
+
+                    for (let i = 0; i < numSegments; i++) {
+                        const startTime = i * segmentDuration;
+                        const endTime = Math.min((i + 1) * segmentDuration, duration);
+                        const segmentLength = endTime - startTime;
+
+                        const segmentBuffer = audioBuffer.constructor === AudioBuffer
+                            ? new AudioBuffer({
+                                numberOfChannels: audioBuffer.numberOfChannels,
+                                length: segmentLength * audioBuffer.sampleRate,
+                                sampleRate: audioBuffer.sampleRate
+                            })
+                            : audioBuffer.context.createBuffer(
+                                audioBuffer.numberOfChannels,
+                                segmentLength * audioBuffer.sampleRate,
+                                audioBuffer.sampleRate
+                            );
+
+                        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+                            const channelData = audioBuffer.getChannelData(channel);
+                            const segmentData = segmentBuffer.getChannelData(channel);
+                            const startSample = Math.floor(startTime * audioBuffer.sampleRate);
+
+                            for (let j = 0; j < segmentData.length; j++) {
+                                segmentData[j] = channelData[startSample + j];
+                            }
+                        }
+
+                        const wavBlob = bufferToWave(segmentBuffer);
+                        zip.file(`${fileName}-${i + 1}.wav`, wavBlob);
+
+                        const progress = 50 + (i / numSegments) * 40;
+                        updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
+                    }
+
+                    updateProgressById(progressContainer, 'Completado', 100);
+                    return { success: true, file: file.name };
+                } catch (error) {
+                    updateProgressById(progressContainer, `Error: ${error.message}`, 0);
+                    return { success: false, file: file.name, error };
+                }
+            });
+
+            await promiseLimit(filePromises, 2);
+
+            updateProgressById(document.querySelector('.progress-item'), 'Generando ZIP...', 95);
             const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-            updateProgress(cutterProgress, '¡Completado!', 100);
             cutterInfo.className = 'info-box success';
-            cutterInfo.innerHTML = '<p><strong>Audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+            cutterInfo.innerHTML = '<p><strong>Todos los audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+            cutterInfo.style.display = 'block';
 
             const downloadLink = document.createElement('a');
             downloadLink.href = URL.createObjectURL(zipBlob);
@@ -220,9 +281,10 @@ function initAudioCutter() {
             }, 500);
 
         } catch (error) {
-            console.error('Error cortando audio:', error);
+            console.error('Error:', error);
             cutterInfo.className = 'info-box error';
             cutterInfo.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
+            cutterInfo.style.display = 'block';
             cutterProgress.style.display = 'none';
             cutAudioBtn.disabled = false;
         }
@@ -1110,6 +1172,22 @@ function updateProgress(progressContainer, text, percentage) {
             lastPercentage: roundedPercentage,
             lastText: text
         };
+    }
+}
+
+function updateProgressById(container, text, percentage) {
+    if (!container) return;
+
+    const progressBar = container.querySelector('.progress-fill');
+    const progressText = container.querySelector('.progress-text');
+
+    const roundedPercentage = Math.round(percentage);
+
+    if (progressBar) {
+        progressBar.style.width = roundedPercentage + '%';
+    }
+    if (progressText) {
+        progressText.textContent = text;
     }
 }
 
