@@ -1319,14 +1319,7 @@ function createForestNoise(audioContext) {
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
-// Convertir AudioBuffer a WebM comprimido o WAV
-async function bufferToWebM(audioBuffer) {
-    // Fallback a WAV - es más confiable que WebM en navegadores
-    // WAV ofrece máxima compatibilidad y es rápido
-    return bufferToWAV(audioBuffer);
-}
-
-// Convertir AudioBuffer a WAV
+// Convertir AudioBuffer a WAV (PCM 16-bit)
 function bufferToWAV(audioBuffer) {
     const numOfChannels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
