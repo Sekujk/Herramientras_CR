@@ -329,7 +329,7 @@ function initAudioCutter() {
                             }
                         }
 
-                        const webmBlob = bufferToWave(segmentBuffer);
+                        const webmBlob = await bufferToWave(segmentBuffer);
                         zip.file(`${fileName}-${i + 1}.webm`, webmBlob);
 
                         const progress = 50 + (i / numSegments) * 40;
