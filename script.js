@@ -110,15 +110,34 @@ class DataWorkerPool {
         // Solo agregar listener una vez por worker
         workerObj.worker.onmessage = messageHandler;
 
-        // Enviar data al worker
+        // Extraer datos de canales como Float32Array (se puede clonar, AudioBuffer no)
+        const sampleRate = audioBuffer.sampleRate;
+        const startSample = Math.floor(startTime * sampleRate);
+        const endSample = Math.floor(endTime * sampleRate);
+        const segmentLength = endSample - startSample;
+
+        const channelsData = [];
+        const transferables = [];
+        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            const segmentData = new Float32Array(segmentLength);
+            for (let i = 0; i < segmentLength; i++) {
+                segmentData[i] = channelData[startSample + i];
+            }
+            channelsData.push(segmentData);
+            transferables.push(segmentData.buffer);
+        }
+
+        // Enviar data al worker (como datos serializables, no AudioBuffer)
         workerObj.worker.postMessage(
             {
-                audioBuffer,
-                startTime,
-                endTime,
+                channelsData,
+                sampleRate,
+                segmentLength,
                 segmentIndex,
                 id: taskId
-            }
+            },
+            transferables // Transferir buffers para mejor rendimiento
         );
     }
 }
@@ -1531,6 +1550,23 @@ function audioBufferToWavBytes(audioBuffer) {
 let ffmpegInstance = null;
 let isFFmpegLoading = false;
 
+// Esperar a que FFmpeg esté disponible en el window
+function waitForFFmpeg(maxWait = 10000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        const checkInterval = setInterval(() => {
+            if (typeof FFmpeg !== 'undefined' && FFmpeg.FFmpeg) {
+                clearInterval(checkInterval);
+                console.log('✅ FFmpeg disponible después de', Date.now() - startTime, 'ms');
+                resolve(true);
+            } else if (Date.now() - startTime > maxWait) {
+                clearInterval(checkInterval);
+                reject(new Error('Timeout esperando que FFmpeg cargue'));
+            }
+        }, 100);
+    });
+}
+
 // Inicializar FFmpeg WASM en el main thread
 async function initFFmpeg() {
     if (ffmpegInstance && ffmpegInstance.isLoaded && ffmpegInstance.isLoaded()) {
@@ -1547,12 +1583,15 @@ async function initFFmpeg() {
         return ffmpegInstance;
     }
 
-    if (typeof FFmpeg === 'undefined' || !FFmpeg.FFmpeg) {
-        throw new Error('FFmpeg WASM no está disponible en el navegador');
-    }
-
     isFFmpegLoading = true;
     try {
+        // Esperar a que FFmpeg esté disponible
+        await waitForFFmpeg();
+
+        if (typeof FFmpeg === 'undefined' || !FFmpeg.FFmpeg) {
+            throw new Error('FFmpeg no se cargó correctamente del CDN');
+        }
+
         ffmpegInstance = new FFmpeg.FFmpeg();
         console.log('🔧 Cargando FFmpeg WASM en main thread...');
         await ffmpegInstance.load({

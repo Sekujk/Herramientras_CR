@@ -1,18 +1,13 @@
 // Data Processing Worker - Copia datos de canales de audio y genera WAV bytes
 // Esta tarea CPU-bound se ejecuta en worker para no bloquear main thread
 
-// Función para convertir AudioBuffer a WAV bytes
-function audioBufferToWavBytes(audioBuffer, startTime, endTime) {
-    const numOfChannels = audioBuffer.numberOfChannels;
-    const sampleRate = audioBuffer.sampleRate;
+// Función para convertir datos Float32 a WAV bytes
+function float32ArrayToWavBytes(channelsData, sampleRate, segmentLength) {
+    const numOfChannels = channelsData.length;
     const format = 1;
     const bitDepth = 16;
     const bytesPerSample = bitDepth / 8;
     const blockAlign = numOfChannels * bytesPerSample;
-
-    const startSample = Math.floor(startTime * sampleRate);
-    const endSample = Math.floor(endTime * sampleRate);
-    const segmentLength = endSample - startSample;
 
     const wavLength = segmentLength * numOfChannels * bytesPerSample + 44;
     const buffer = new ArrayBuffer(wavLength);
@@ -52,9 +47,9 @@ function audioBufferToWavBytes(audioBuffer, startTime, endTime) {
     let offset = 0;
 
     for (let channel = 0; channel < numOfChannels; channel++) {
-        const channelData = audioBuffer.getChannelData(channel);
+        const channelData = channelsData[channel];
         for (let i = 0; i < segmentLength; i++) {
-            const sample = Math.max(-1, Math.min(1, channelData[startSample + i]));
+            const sample = Math.max(-1, Math.min(1, channelData[i]));
             converted[offset++] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
         }
     }
@@ -65,16 +60,16 @@ function audioBufferToWavBytes(audioBuffer, startTime, endTime) {
 // Manejar mensaje del main thread
 self.onmessage = async (event) => {
     try {
-        const { audioBuffer, startTime, endTime, segmentIndex, id } = event.data;
+        const { channelsData, sampleRate, segmentLength, segmentIndex, id } = event.data;
 
-        if (!audioBuffer) {
-            throw new Error('AudioBuffer no recibido');
+        if (!channelsData || !sampleRate || segmentLength === undefined) {
+            throw new Error('Datos incompletos recibidos');
         }
 
-        console.log(`🔄 Data Worker: Procesando segmento ${segmentIndex} (${(startTime).toFixed(2)}s - ${(endTime).toFixed(2)}s)`);
+        console.log(`🔄 Data Worker: Procesando segmento ${segmentIndex} (${segmentLength} samples)`);
 
         // Convertir a WAV bytes
-        const wavBytes = audioBufferToWavBytes(audioBuffer, startTime, endTime);
+        const wavBytes = float32ArrayToWavBytes(channelsData, sampleRate, segmentLength);
 
         console.log(`✅ Data Worker: Segmento ${segmentIndex} convertido a WAV - ${(wavBytes.length / 1024).toFixed(2)} KB`);
 
@@ -101,3 +96,4 @@ self.onmessage = async (event) => {
 };
 
 console.log('✅ Data Processing Worker cargado');
+
