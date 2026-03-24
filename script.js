@@ -1388,8 +1388,8 @@ async function bufferToWAV(audioBuffer) {
 
         const processNextChunk = async () => {
             try {
-                // Procesar 2 chunks por iteración
-                for (let batch = 0; batch < 2 && processed < totalLength; batch++) {
+                // Procesar 6 chunks por iteración (3x más rápido)
+                for (let batch = 0; batch < 6 && processed < totalLength; batch++) {
                     const i = processed;
                     let left = audioData[0].subarray(i, Math.min(i + chunkSize, totalLength));
                     let right = numOfChannels > 1 ? audioData[1].subarray(i, Math.min(i + chunkSize, totalLength)) : left;
@@ -1427,8 +1427,8 @@ async function bufferToWAV(audioBuffer) {
                     console.log('✅ MP3 completado. Tamaño:', (mp3Blob.size / 1024 / 1024).toFixed(2), 'MB');
                     resolve(mp3Blob);
                 } else {
-                    // Siguiente batch después de breve delay
-                    setTimeout(processNextChunk, 10);
+                    // Siguiente batch después de breve delay (1ms para responsividad)
+                    setTimeout(processNextChunk, 1);
                 }
             } catch (error) {
                 console.error('❌ Error en MP3 encoding:', error);
