@@ -202,6 +202,10 @@ function initAudioCutter() {
             updateProgress(cutterProgress, 'Generando archivo ZIP...', 95);
             const zipBlob = await zip.generateAsync({ type: 'blob' });
 
+            updateProgress(cutterProgress, '¡Completado!', 100);
+            cutterInfo.className = 'info-box success';
+            cutterInfo.innerHTML = '<p><strong>Audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+
             const downloadLink = document.createElement('a');
             downloadLink.href = URL.createObjectURL(zipBlob);
             downloadLink.download = `audios-cortados-${Date.now()}.zip`;
@@ -209,15 +213,9 @@ function initAudioCutter() {
 
             setTimeout(() => {
                 URL.revokeObjectURL(downloadLink.href);
-                updateProgress(cutterProgress, '¡Completado!', 100);
-                cutterInfo.className = 'info-box success';
-                cutterInfo.innerHTML = '<p><strong>Audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
-            }, 200);
-
-            setTimeout(() => {
                 cutterProgress.style.display = 'none';
                 cutAudioBtn.disabled = false;
-            }, 2000);
+            }, 500);
 
         } catch (error) {
             console.error('Error cortando audio:', error);
@@ -287,11 +285,11 @@ function initAudioConverter() {
                 const convertedBlob = await convertAudioFormat(file, outputFormat, converterProgress);
                 const fileName = file.name.replace(/\.[^/.]+$/, "") + '.' + outputFormat;
 
-                downloadFile(convertedBlob, fileName);
-
                 updateProgress(converterProgress, 'Conversión exitosa', 100);
                 converterInfo.className = 'info-box success';
                 converterInfo.innerHTML = '<p><strong>Conversión exitosa</strong></p>';
+
+                downloadFile(convertedBlob, fileName);
             } else {
                 // Múltiples archivos, crear ZIP
                 const zip = new JSZip();
@@ -308,17 +306,18 @@ function initAudioConverter() {
 
                 updateProgress(converterProgress, 'Generando ZIP...', 95);
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
-                downloadFile(zipBlob, `audios-convertidos-${Date.now()}.zip`);
 
                 updateProgress(converterProgress, 'Conversión exitosa', 100);
                 converterInfo.className = 'info-box success';
                 converterInfo.innerHTML = '<p><strong>Conversión exitosa</strong></p><p>ZIP descargado</p>';
+
+                downloadFile(zipBlob, `audios-convertidos-${Date.now()}.zip`);
             }
 
             setTimeout(() => {
                 converterProgress.style.display = 'none';
                 convertAudioBtn.disabled = false;
-            }, 2000);
+            }, 500);
 
         } catch (error) {
             console.error('Error convirtiendo audio:', error);
@@ -413,11 +412,11 @@ function initVideoExtractor() {
 
                 const fileName = file.name.replace(/\.[^/.]+$/, "") + '.' + outputFormat;
 
-                downloadFile(audioBlob, fileName);
-
                 updateProgress(extractorProgress, 'Completado', 100);
                 extractorInfo.className = 'info-box success';
                 extractorInfo.innerHTML = '<p><strong>Audio extraido exitosamente</strong></p>';
+
+                downloadFile(audioBlob, fileName);
             } else {
                 const zip = new JSZip();
 
@@ -437,17 +436,18 @@ function initVideoExtractor() {
 
                 updateProgress(extractorProgress, 'Generando ZIP...', 95);
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
-                downloadFile(zipBlob, `audios-extraidos-${Date.now()}.zip`);
 
                 updateProgress(extractorProgress, 'Completado', 100);
                 extractorInfo.className = 'info-box success';
                 extractorInfo.innerHTML = '<p><strong>Audios extraidos exitosamente</strong></p>';
+
+                downloadFile(zipBlob, `audios-extraidos-${Date.now()}.zip`);
             }
 
             setTimeout(() => {
                 extractorProgress.style.display = 'none';
                 extractAudioBtn.disabled = false;
-            }, 2000);
+            }, 500);
 
         } catch (error) {
             console.error('Error extrayendo audio:', error);
