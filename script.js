@@ -476,7 +476,6 @@ async function extractAudioFromVideo(videoFile, progressCallback = null) {
         try {
             const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
             console.log('Es audio directo! Duración:', decoded.duration, 'segundos');
-            if (progressCallback) progressCallback(100, 'Completado');
             // Si funciona, devolver el archivo original
             return videoFile;
         } catch (decodeError) {
@@ -576,7 +575,6 @@ async function extractAudioFromVideo(videoFile, progressCallback = null) {
                         console.log('Grabación completada. Chunks:', chunks.length);
                         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
                         cleanup();
-                        if (progressCallback) progressCallback(100, 'Completado');
                         resolve(audioBlob);
                     }
                 };
