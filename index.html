@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramientas de Estudio</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Herramientas de Estudio</h1>
+        <p>Herramientas para optimizar tu tiempo de estudio y organización</p>
+    </header>
+
+    <nav class="tool-nav">
+        <button class="nav-btn active" data-tool="audio-cutter">Cortador de Audios</button>
+        <button class="nav-btn" data-tool="audio-converter">Convertidor de Audio</button>
+        <button class="nav-btn" data-tool="video-extractor">Extractor de Audio</button>
+        <button class="nav-btn" data-tool="pomodoro">Pomodoro</button>
+        <button class="nav-btn" data-tool="white-noise">Ruido Ambiental</button>
+    </nav>
+
+    <main class="container">
+        <!-- Cortador de Audios -->
+        <section id="audio-cutter" class="tool-section active">
+            <h2>Cortador de Audios</h2>
+            <p class="description">Divide archivos de audio largos en segmentos más pequeños y descárgalos en un ZIP</p>
+
+            <div class="tool-content">
+                <div class="info-card">
+                    <h3>Cómo usar:</h3>
+                    <ol>
+                        <li>Selecciona archivos de audio O video (se extraerá el audio automáticamente)</li>
+                        <li>Define la duración deseada de cada segmento</li>
+                        <li>Descarga el ZIP con todos los segmentos nombrados como: <code>nombre-1.wav</code>, <code>nombre-2.wav</code>, etc.</li>
+                    </ol>
+                    <p><strong>Formatos soportados:</strong> MP3, WAV, OGG, M4A, FLAC, MP4, AVI, MOV, MKV, WEBM</p>
+                </div>
+
+                <div class="upload-area" id="cutter-upload-area">
+                    <input type="file" id="audio-file" accept="audio/*,video/*" multiple>
+                    <label for="audio-file">
+                        <span class="upload-icon">📁</span>
+                        <span>Arrastra archivos de audio o video aquí</span>
+                    </label>
+                </div>
+
+                <div class="controls">
+                    <div class="input-group">
+                        <label for="segment-duration">Duración de cada segmento (minutos):</label>
+                        <input type="number" id="segment-duration" min="1" max="120" value="10">
+                        <small>Ejemplo: 10 minutos dividirá un audio de 1 hora en 6 segmentos</small>
+                    </div>
+                </div>
+
+                <div id="cutter-info" class="info-box" style="display: none;"></div>
+
+                <div id="cutter-file-list" class="file-list" style="display: none;"></div>
+
+                <button id="cut-audio-btn" class="action-btn" style="display: none;">Cortar y Descargar ZIP</button>
+
+                <div id="cutter-progress" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p class="progress-text">Procesando...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Convertidor de Audio -->
+        <section id="audio-converter" class="tool-section">
+            <h2>Convertidor de Audio</h2>
+            <p class="description">Convierte archivos de audio entre diferentes formatos fácilmente</p>
+
+            <div class="tool-content">
+                <div class="info-card">
+                    <h3>Cómo usar:</h3>
+                    <ol>
+                        <li>Selecciona archivos de audio o video (se extraerá el audio automáticamente)</li>
+                        <li>Elige el formato de salida (WAV recomendado para mejor compatibilidad)</li>
+                        <li>Descarga los archivos convertidos</li>
+                    </ol>
+                    <p><strong>Nota:</strong> La conversión se realiza en formato WAV sin compresión para máxima calidad</p>
+                </div>
+
+                <div class="upload-area" id="converter-upload-area">
+                    <input type="file" id="converter-file" accept="audio/*,video/*" multiple>
+                    <label for="converter-file">
+                        <span class="upload-icon">📁</span>
+                        <span>Arrastra archivos de audio o video aquí</span>
+                    </label>
+                </div>
+
+                <div class="controls">
+                    <div class="input-group">
+                        <label for="output-format">Formato de salida:</label>
+                        <select id="output-format">
+                            <option value="wav">WAV (sin compresión, máxima calidad)</option>
+                            <option value="mp3">MP3 (limitado en navegador)</option>
+                            <option value="ogg">OGG (limitado en navegador)</option>
+                            <option value="webm">WEBM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="converter-info" class="info-box" style="display: none;"></div>
+
+                <div id="converter-file-list" class="file-list" style="display: none;"></div>
+
+                <button id="convert-audio-btn" class="action-btn" style="display: none;">Convertir Audio</button>
+
+                <div id="converter-progress" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p class="progress-text">Convirtiendo...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Extractor de Audio de Video -->
+        <section id="video-extractor" class="tool-section">
+            <h2>Extractor de Audio de Video</h2>
+            <p class="description">Extrae la pista de audio de archivos de video para escuchar sin necesidad del video</p>
+
+            <div class="tool-content">
+                <div class="info-card">
+                    <h3>Cómo usar:</h3>
+                    <ol>
+                        <li>Selecciona uno o más archivos de video (clases grabadas, conferencias, tutoriales)</li>
+                        <li>Elige el formato de audio deseado</li>
+                        <li>El audio se extraerá y descargará automáticamente</li>
+                    </ol>
+                    <p><strong>Formatos de video soportados:</strong> MP4, AVI, MOV, MKV, WEBM</p>
+                    <p><strong>Tip:</strong> Útil para escuchar clases mientras haces otras actividades</p>
+                </div>
+
+                <div class="upload-area" id="video-upload-area">
+                    <input type="file" id="video-file" accept="video/*" multiple>
+                    <label for="video-file">
+                        <span class="upload-icon">🎥</span>
+                        <span>Arrastra videos aquí o haz clic para seleccionar</span>
+                    </label>
+                </div>
+
+                <div class="controls">
+                    <div class="input-group">
+                        <label for="extract-format">Formato de audio:</label>
+                        <select id="extract-format">
+                            <option value="wav">WAV (alta calidad)</option>
+                            <option value="webm">WEBM</option>
+                            <option value="ogg">OGG</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="extractor-info" class="info-box" style="display: none;"></div>
+
+                <div id="extractor-file-list" class="file-list" style="display: none;"></div>
+
+                <button id="extract-audio-btn" class="action-btn" style="display: none;">Extraer Audio</button>
+
+                <div id="extractor-progress" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p class="progress-text">Extrayendo...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Temporizador Pomodoro -->
+        <section id="pomodoro" class="tool-section">
+            <h2>Temporizador Pomodoro</h2>
+            <p class="description">Técnica de gestión del tiempo: 25 min de trabajo + 5 min de descanso = Máxima productividad</p>
+
+            <div class="tool-content pomodoro-content">
+                <div class="info-card">
+                    <h3>Técnica Pomodoro:</h3>
+                    <ul>
+                        <li>Trabaja enfocado durante 25 minutos</li>
+                        <li>Toma un descanso de 5 minutos</li>
+                        <li>Repite 4 veces</li>
+                        <li>Descanso largo de 15 minutos</li>
+                    </ul>
+                    <p><strong>Beneficios:</strong> Mejora el enfoque, reduce el agotamiento mental y aumenta la productividad</p>
+                </div>
+
+                <div class="pomodoro-display">
+                    <div class="timer-circle">
+                        <svg class="timer-svg" viewBox="0 0 200 200">
+                            <circle class="timer-circle-bg" cx="100" cy="100" r="90"></circle>
+                            <circle class="timer-circle-progress" cx="100" cy="100" r="90"></circle>
+                        </svg>
+                        <div class="timer-text">
+                            <span id="timer-display">25:00</span>
+                            <span id="timer-label">Trabajo</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pomodoro-controls">
+                    <button id="start-pomodoro" class="action-btn">Iniciar</button>
+                    <button id="pause-pomodoro" class="action-btn secondary" style="display: none;">Pausar</button>
+                    <button id="reset-pomodoro" class="action-btn secondary">Reiniciar</button>
+                </div>
+
+                <div class="pomodoro-stats">
+                    <div class="stat">
+                        <span class="stat-label">Sesiones completadas</span>
+                        <span id="sessions-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Ciclo actual</span>
+                        <span id="current-cycle">1/4</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h3>Configuración personalizada:</h3>
+                    <div class="input-group">
+                        <label for="work-duration">Tiempo de trabajo (min):</label>
+                        <input type="number" id="work-duration" min="1" max="60" value="25">
+                    </div>
+                    <div class="input-group">
+                        <label for="break-duration">Descanso corto (min):</label>
+                        <input type="number" id="break-duration" min="1" max="30" value="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="long-break-duration">Descanso largo (min):</label>
+                        <input type="number" id="long-break-duration" min="1" max="60" value="15">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Generador de Ruido Blanco -->
+        <section id="white-noise" class="tool-section">
+            <h2>Generador de Ruido Ambiental</h2>
+            <p class="description">Sonidos ambientales para mejorar la concentración y bloquear distracciones</p>
+
+            <div class="tool-content">
+                <div class="info-card">
+                    <h3>Tipos de ruido disponibles:</h3>
+                    <ul>
+                        <li><strong>Ruido Blanco:</strong> Frecuencias uniformes, ideal para bloquear conversaciones</li>
+                        <li><strong>Ruido Rosa:</strong> Más suave que el blanco, perfecto para leer</li>
+                        <li><strong>Ruido Marrón:</strong> Profundo y envolvente, como una cascada</li>
+                        <li><strong>Lluvia:</strong> Sonido relajante de lluvia constante</li>
+                        <li><strong>Olas del Mar:</strong> Ritmo natural de las olas del océano</li>
+                        <li><strong>Bosque:</strong> Ambiente natural con pájaros y viento</li>
+                    </ul>
+                </div>
+
+                <div class="noise-types">
+                    <button class="noise-btn" data-type="white">Ruido Blanco</button>
+                    <button class="noise-btn" data-type="pink">Ruido Rosa</button>
+                    <button class="noise-btn" data-type="brown">Ruido Marrón</button>
+                    <button class="noise-btn" data-type="rain">Lluvia</button>
+                    <button class="noise-btn" data-type="ocean">Olas del Mar</button>
+                    <button class="noise-btn" data-type="forest">Bosque</button>
+                </div>
+
+                <div class="controls">
+                    <div class="input-group">
+                        <label for="noise-volume">Volumen:</label>
+                        <input type="range" id="noise-volume" min="0" max="100" value="50">
+                        <span id="volume-value">50%</span>
+                    </div>
+                </div>
+
+                <div class="noise-controls">
+                    <button id="play-noise" class="action-btn">Reproducir</button>
+                    <button id="stop-noise" class="action-btn secondary" style="display: none;">Detener</button>
+                </div>
+
+                <div id="noise-status" class="info-box" style="display: none;">
+                    <p>Reproduciendo: <strong id="current-noise">-</strong></p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Herramientas de Estudio · Todas las operaciones se realizan localmente en tu navegador</p>
+        <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.9;">100% privado · Sin servidores · Sin registro de datos</p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
