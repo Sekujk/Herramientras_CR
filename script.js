@@ -1337,15 +1337,154 @@ function createForestNoise(audioContext) {
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
-// Convertir AudioBuffer a MP3 usando lamejs (reduce tamaño 10x)
-// Convertir AudioBuffer a MP3 con lamejs (chunks async - no lagea)
+// Web Worker pool para procesamiento paralelo
+// Convertir AudioBuffer a WAV bytes (servidor de utilidad para workers)
+function audioBufferToWavBytes(audioBuffer) {
+    const numOfChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const format = 1;
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numOfChannels * bytesPerSample;
+
+    const wavLength = audioBuffer.length * numOfChannels * bytesPerSample + 44;
+    const buffer = new ArrayBuffer(wavLength);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+
+    const writeUint32 = (offset, value) => {
+        view.setUint32(offset, value, true);
+    };
+
+    const writeUint16 = (offset, value) => {
+        view.setUint16(offset, value, true);
+    };
+
+    writeString(0, 'RIFF');
+    writeUint32(4, wavLength - 8);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    writeUint32(16, 16);
+    writeUint16(20, format);
+    writeUint16(22, numOfChannels);
+    writeUint32(24, sampleRate);
+    writeUint32(28, sampleRate * blockAlign);
+    writeUint16(32, blockAlign);
+    writeUint16(34, bitDepth);
+    writeString(36, 'data');
+    writeUint32(40, audioBuffer.length * numOfChannels * bytesPerSample);
+
+    const converted = new Int16Array(buffer, 44);
+    let offset = 0;
+
+    for (let channel = 0; channel < numOfChannels; channel++) {
+        const channelData = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < audioBuffer.length; i++) {
+            const sample = Math.max(-1, Math.min(1, channelData[i]));
+            converted[offset++] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        }
+    }
+
+    return new Uint8Array(buffer);
+}
+
+class AudioWorkerPool {
+    constructor(maxWorkers = 4) {
+        this.workers = [];
+        this.queue = [];
+        this.taskId = 0;
+
+        for (let i = 0; i < maxWorkers; i++) {
+            const worker = new Worker('audioWorker.js');
+            this.workers.push({ worker, busy: false, promises: {} });
+        }
+    }
+
+    async encodeAudio(audioBuffer, format = 'opus', bitrate = 48) {
+        return new Promise((resolve, reject) => {
+            const taskId = ++this.taskId;
+            // Convertir AudioBuffer a WAV bytes primero (no se puede enviar AudioBuffer directamente)
+            const wavBytes = audioBufferToWavBytes(audioBuffer);
+            const task = { wavBytes, format, bitrate, resolve, reject, taskId };
+
+            const available = this.workers.find(w => !w.busy);
+            if (available) {
+                this.runTask(available, task);
+            } else {
+                this.queue.push(task);
+            }
+        });
+    }
+
+    runTask(workerObj, task) {
+        workerObj.busy = true;
+        const { wavBytes, format, bitrate, taskId } = task;
+
+        workerObj.promises[taskId] = { resolve: task.resolve, reject: task.reject };
+
+        workerObj.worker.onmessage = (e) => {
+            const { id, success, result, error } = e.data;
+
+            if (workerObj.promises[id]) {
+                if (success) {
+                    const blob = new Blob([result], { type: format === 'opus' ? 'audio/ogg' : `audio/${format}` });
+                    workerObj.promises[id].resolve(blob);
+                } else {
+                    workerObj.promises[id].reject(new Error(error));
+                }
+                delete workerObj.promises[id];
+            }
+
+            workerObj.busy = false;
+
+            if (this.queue.length > 0) {
+                const nextTask = this.queue.shift();
+                this.runTask(workerObj, nextTask);
+            }
+        };
+
+        workerObj.worker.postMessage({
+            wavBytes,
+            format,
+            bitrate,
+            id: taskId
+        }, [wavBytes.buffer]); // Transferir el buffer para mejor rendimiento
+    }
+}
+
+// Inicializar pool de workers
+const audioWorkerPool = new AudioWorkerPool(4);
+
+// Nueva función bufferToWAV con FFmpeg WASM + fallback
 async function bufferToWAV(audioBuffer) {
-    console.log('🎵 Iniciando MP3 encoding. Duración:', audioBuffer.duration, 'segundos');
+    console.log('🎵 Iniciando encoding. Duración:', audioBuffer.duration, 'segundos');
+
+    // Intentar usar FFmpeg WASM si está disponible
+    if (typeof FFmpeg !== 'undefined' && FFmpeg.FFmpeg) {
+        try {
+            console.log('🚀 Usando FFmpeg WASM (10x más rápido)');
+            return await audioWorkerPool.encodeAudio(audioBuffer, 'opus', 48);
+        } catch (error) {
+            console.warn('⚠️ FFmpeg falló, usando fallback a lamejs:', error);
+        }
+    }
+
+    // Fallback: lamejs (lento pero funciona)
+    console.log('⏱️ Usando lamejs (fallback lento)');
+    return await bufferToWAV_Legacy(audioBuffer);
+}
+
+// Función legacy con lamejs (backup)
+async function bufferToWAV_Legacy(audioBuffer) {
     const targetSampleRate = 22050;
     const numOfChannels = audioBuffer.numberOfChannels;
     const kbps = 128;
 
-    // Resamplear primero
     console.log('🔄 Resampling de', audioBuffer.sampleRate, 'Hz a', targetSampleRate, 'Hz');
     let audioData = [];
     const ratio = targetSampleRate / audioBuffer.sampleRate;
@@ -1367,28 +1506,24 @@ async function bufferToWAV(audioBuffer) {
         }
         audioData.push(resampled);
     }
-    console.log('✅ Resampling completado. Nuevos samples:', audioData[0].length);
+    console.log('✅ Resampling completado');
 
     if (!window.lamejs) {
-        throw new Error('lamejs no cargada');
+        throw new Error('Ni FFmpeg ni lamejs disponibles');
     }
 
-    console.log('🔧 Creando encoder MP3 a', kbps, 'kbps');
+    console.log('🔧 Usando encoder MP3 lamejs a', kbps, 'kbps');
     const encoder = new window.lamejs.Mp3Encoder(numOfChannels, targetSampleRate, kbps);
     const mp3Data = [];
     const chunkSize = 1152;
     const totalLength = audioData[0].length;
 
-    console.log('📊 Total chunks a procesar:', Math.ceil(totalLength / chunkSize));
-
-    // Procesar con chunks pequeños y delays
     return new Promise((resolve, reject) => {
         let processed = 0;
         let chunkCount = 0;
 
         const processNextChunk = async () => {
             try {
-                // Procesar 6 chunks por iteración (3x más rápido)
                 for (let batch = 0; batch < 6 && processed < totalLength; batch++) {
                     const i = processed;
                     let left = audioData[0].subarray(i, Math.min(i + chunkSize, totalLength));
@@ -1412,26 +1547,24 @@ async function bufferToWAV(audioBuffer) {
                 }
 
                 if (chunkCount % 10 === 0) {
-                    console.log('⏳ Progreso MP3:', Math.round((processed / totalLength) * 100) + '%');
+                    console.log('⏳ Progreso:', Math.round((processed / totalLength) * 100) + '%');
                 }
 
                 if (processed >= totalLength) {
-                    // Finalizar
-                    console.log('🎬 Finalizando MP3 encoding...');
+                    console.log('🎬 Finalizando encoding...');
                     const finalChunk = encoder.flush();
                     if (finalChunk.length > 0) {
                         mp3Data.push(finalChunk);
                     }
 
-                    const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
-                    console.log('✅ MP3 completado. Tamaño:', (mp3Blob.size / 1024 / 1024).toFixed(2), 'MB');
-                    resolve(mp3Blob);
+                    const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                    console.log('✅ Encoding completado. Tamaño:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+                    resolve(blob);
                 } else {
-                    // Siguiente batch después de breve delay (1ms para responsividad)
                     setTimeout(processNextChunk, 1);
                 }
             } catch (error) {
-                console.error('❌ Error en MP3 encoding:', error);
+                console.error('❌ Error en encoding:', error);
                 reject(error);
             }
         };
