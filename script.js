@@ -329,8 +329,8 @@ function initAudioCutter() {
                             }
                         }
 
-                        const wavBlob = bufferToWave(segmentBuffer);
-                        zip.file(`${fileName}-${i + 1}.wav`, wavBlob);
+                        const webmBlob = bufferToWave(segmentBuffer);
+                        zip.file(`${fileName}-${i + 1}.webm`, webmBlob);
 
                         const progress = 50 + (i / numSegments) * 40;
                         updateProgressById(progressContainer, `Segmento ${i + 1}/${numSegments}`, progress);
@@ -1309,58 +1309,43 @@ function createForestNoise(audioContext) {
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
+// Convertir AudioBuffer a WebM comprimido usando MediaRecorder
+async function bufferToWebM(audioBuffer) {
+    return new Promise((resolve) => {
+        const audioCtx = new AudioContext();
+        const destination = audioCtx.createMediaStreamAudioDestinationNode();
+
+        // Crear buffer source y conectar
+        const bufferSource = audioCtx.createBufferSource();
+        bufferSource.buffer = audioBuffer;
+        bufferSource.connect(destination);
+
+        // Crear recorder con WebM/Opus (comprimido)
+        const mediaRecorder = new MediaRecorder(destination.stream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 128000
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            resolve(blob);
+            audioCtx.close();
+        };
+
+        mediaRecorder.start();
+        bufferSource.start(0);
+        bufferSource.stop(audioCtx.currentTime + audioBuffer.duration);
+
+        // Detener grabación después de la duración del buffer
+        setTimeout(() => mediaRecorder.stop(), audioBuffer.duration * 1000);
+    });
+}
+
+// Mantener bufferToWave como alias para compatibilidad
 function bufferToWave(audioBuffer) {
-    const numOfChannels = audioBuffer.numberOfChannels;
-    const length = audioBuffer.length * numOfChannels * 2 + 44;
-    const buffer = new ArrayBuffer(length);
-    const view = new DataView(buffer);
-    const channels = [];
-    let offset = 0;
-    let pos = 0;
-
-    // Escribir encabezado WAV
-    setUint32(0x46464952); // "RIFF"
-    setUint32(length - 8); // file length - 8
-    setUint32(0x45564157); // "WAVE"
-
-    setUint32(0x20746d66); // "fmt " chunk
-    setUint32(16); // length = 16
-    setUint16(1); // PCM (uncompressed)
-    setUint16(numOfChannels);
-    setUint32(audioBuffer.sampleRate);
-    setUint32(audioBuffer.sampleRate * 2 * numOfChannels); // avg. bytes/sec
-    setUint16(numOfChannels * 2); // block-align
-    setUint16(16); // 16-bit
-
-    setUint32(0x61746164); // "data" - chunk
-    setUint32(length - pos - 4); // chunk length
-
-    // Escribir datos de audio entrelazados
-    for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
-        channels.push(audioBuffer.getChannelData(i));
-    }
-
-    while (pos < length) {
-        for (let i = 0; i < numOfChannels; i++) {
-            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-            view.setInt16(pos, sample, true);
-            pos += 2;
-        }
-        offset++;
-    }
-
-    return new Blob([buffer], { type: 'audio/wav' });
-
-    function setUint16(data) {
-        view.setUint16(pos, data, true);
-        pos += 2;
-    }
-
-    function setUint32(data) {
-        view.setUint32(pos, data, true);
-        pos += 4;
-    }
+    return bufferToWebM(audioBuffer);
 }
 
 function updateProgress(progressContainer, text, percentage) {
