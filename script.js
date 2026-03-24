@@ -260,6 +260,10 @@ function initAudioCutter() {
         cutAudioBtn.disabled = true;
         isProcessing = true;
 
+        console.log('🎬 INICIANDO CORTADOR DE AUDIOS');
+        console.log('Total archivos a procesar:', selectedFiles.length);
+        console.log('Duración de segmento:', segmentDuration / 60, 'minutos');
+
         try {
             const progressIds = {};
 
@@ -267,6 +271,7 @@ function initAudioCutter() {
             for (const file of selectedFiles) {
                 const progressId = createProgressBar('cutter-progress', file.name);
                 progressIds[file.name] = progressId;
+                console.log('📋 Archivo:', file.name, '- Tamaño:', (file.size / 1024 / 1024).toFixed(2), 'MB');
             }
 
             // Procesar archivos en paralelo (máximo 2 simultáneamente)
@@ -276,6 +281,7 @@ function initAudioCutter() {
                 let progressContainer; // Declarar fuera del try para que esté disponible en catch
 
                 try {
+                    console.log('▶️ Procesando:', file.name);
                     progressContainer = document.getElementById(progressId);
                     updateProgressById(progressContainer, `Cargando ${file.name}...`, 10);
 
@@ -283,22 +289,27 @@ function initAudioCutter() {
 
                     // Detectar si es video y extraer audio
                     if (file.type.startsWith('video/')) {
+                        console.log('🎥 Es video, extrayendo audio...');
                         const audioBlob = await extractAudioFromVideo(file, (videoProgress, message) => {
                             updateProgressById(progressContainer, message, videoProgress * 0.5);
                         });
+                        console.log('✅ Audio extraído');
                         const arrayBuffer = await audioBlob.arrayBuffer();
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                     } else {
+                        console.log('🎵 Es audio, decodificando...');
                         const arrayBuffer = await file.arrayBuffer();
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                        console.log('✅ Audio decodificado');
                     }
 
                     updateProgressById(progressContainer, `Cortando ${file.name}...`, 50);
 
                     const duration = audioBuffer.duration;
                     const numSegments = Math.ceil(duration / segmentDuration);
+                    console.log('📊 Duración:', duration.toFixed(2), 'seg | Segmentos:', numSegments);
 
                     // Crear un ZIP por archivo
                     const zip = new JSZip();
@@ -330,7 +341,9 @@ function initAudioCutter() {
                             }
                         }
 
+                        console.log('🔄 Segmento', (i + 1) + '/' + numSegments, '- Iniciando MP3 encoding...');
                         const mp3Blob = await bufferToWave(segmentBuffer);
+                        console.log('✅ Segmento', (i + 1), 'listo -', (mp3Blob.size / 1024).toFixed(2), 'KB');
                         zip.file(`${fileName}-${i + 1}.mp3`, mp3Blob);
 
                         const progress = 50 + (i / numSegments) * 40;
@@ -338,8 +351,10 @@ function initAudioCutter() {
                     }
 
                     // Generar ZIP
+                    console.log('📦 Generando ZIP para', fileName);
                     updateProgressById(progressContainer, 'Generando ZIP...', 95);
                     const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    console.log('✅ ZIP completado -', (zipBlob.size / 1024 / 1024).toFixed(2), 'MB');
 
                     updateProgressById(progressContainer, 'Completado', 100);
 
@@ -356,12 +371,15 @@ function initAudioCutter() {
 
                     return { success: true, file: file.name };
                 } catch (error) {
+                    console.error('❌ Error procesando archivo', file.name, ':', error);
                     updateProgressById(progressContainer, `Error: ${error.message}`, 0);
                     return { success: false, file: file.name, error };
                 }
             });
 
             await promiseLimit(filePromises, 6);
+
+            console.log('🎉 ¡CORTADO COMPLETADO! Todos los archivos procesados');
 
             cutterInfo.className = 'info-box success';
             cutterInfo.innerHTML = '<p><strong>Archivos procesados</strong></p><p>Haz clic en el botón de descarga para obtener tu archivo</p>';
@@ -373,7 +391,7 @@ function initAudioCutter() {
             }, 500);
 
         } catch (error) {
-            console.error('Error:', error);
+            console.error('❌ ERROR EN CORTADOR:', error);
             cutterInfo.className = 'info-box error';
             cutterInfo.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
             cutterInfo.style.display = 'block';
@@ -1322,11 +1340,13 @@ function createForestNoise(audioContext) {
 // Convertir AudioBuffer a MP3 usando lamejs (reduce tamaño 10x)
 // Convertir AudioBuffer a MP3 con lamejs (chunks async - no lagea)
 async function bufferToWAV(audioBuffer) {
+    console.log('🎵 Iniciando MP3 encoding. Duración:', audioBuffer.duration, 'segundos');
     const targetSampleRate = 22050;
     const numOfChannels = audioBuffer.numberOfChannels;
     const kbps = 128;
 
     // Resamplear primero
+    console.log('🔄 Resampling de', audioBuffer.sampleRate, 'Hz a', targetSampleRate, 'Hz');
     let audioData = [];
     const ratio = targetSampleRate / audioBuffer.sampleRate;
 
@@ -1347,19 +1367,24 @@ async function bufferToWAV(audioBuffer) {
         }
         audioData.push(resampled);
     }
+    console.log('✅ Resampling completado. Nuevos samples:', audioData[0].length);
 
     if (!window.lamejs) {
         throw new Error('lamejs no cargada');
     }
 
+    console.log('🔧 Creando encoder MP3 a', kbps, 'kbps');
     const encoder = new window.lamejs.Mp3Encoder(numOfChannels, targetSampleRate, kbps);
     const mp3Data = [];
     const chunkSize = 1152;
     const totalLength = audioData[0].length;
 
+    console.log('📊 Total chunks a procesar:', Math.ceil(totalLength / chunkSize));
+
     // Procesar con chunks pequeños y delays
     return new Promise((resolve, reject) => {
         let processed = 0;
+        let chunkCount = 0;
 
         const processNextChunk = async () => {
             try {
@@ -1383,22 +1408,30 @@ async function bufferToWAV(audioBuffer) {
                     }
 
                     processed += chunkSize;
+                    chunkCount++;
+                }
+
+                if (chunkCount % 10 === 0) {
+                    console.log('⏳ Progreso MP3:', Math.round((processed / totalLength) * 100) + '%');
                 }
 
                 if (processed >= totalLength) {
                     // Finalizar
+                    console.log('🎬 Finalizando MP3 encoding...');
                     const finalChunk = encoder.flush();
                     if (finalChunk.length > 0) {
                         mp3Data.push(finalChunk);
                     }
 
                     const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                    console.log('✅ MP3 completado. Tamaño:', (mp3Blob.size / 1024 / 1024).toFixed(2), 'MB');
                     resolve(mp3Blob);
                 } else {
                     // Siguiente batch después de breve delay
                     setTimeout(processNextChunk, 10);
                 }
             } catch (error) {
+                console.error('❌ Error en MP3 encoding:', error);
                 reject(error);
             }
         };
