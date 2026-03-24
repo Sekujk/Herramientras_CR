@@ -242,6 +242,25 @@ header p {
     white-space: nowrap;
 }
 
+.remove-file-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    margin-left: 1rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-file-btn:hover {
+    color: var(--danger);
+    transform: scale(1.2);
+}
+
 .upload-area input[type="file"] {
     display: none;
 }

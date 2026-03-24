@@ -144,6 +144,7 @@ function initDragAndDrop() {
 function initAudioCutter() {
     const audioFileInput = document.getElementById('audio-file');
     const cutAudioBtn = document.getElementById('cut-audio-btn');
+    const cutterClearBtn = document.getElementById('cutter-clear-btn');
     const segmentDurationInput = document.getElementById('segment-duration');
     const cutterInfo = document.getElementById('cutter-info');
     const cutterProgress = document.getElementById('cutter-progress');
@@ -153,36 +154,88 @@ function initAudioCutter() {
 
     let selectedFiles = [];
 
-    audioFileInput.addEventListener('change', (e) => {
-        selectedFiles = Array.from(e.target.files);
-        if (selectedFiles.length > 0) {
-            const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
-            const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        updateFileDisplay();
+    }
 
-            const audioFiles = selectedFiles.filter(f => f.type.startsWith('audio/')).length;
-            const videoFiles = selectedFiles.filter(f => f.type.startsWith('video/')).length;
+    function clearAllFiles() {
+        selectedFiles = [];
+        audioFileInput.value = '';
+        updateFileDisplay();
+    }
 
-            // Actualizar el label y área de upload
+    function updateFileDisplay() {
+        if (selectedFiles.length === 0) {
+            fileList.style.display = 'none';
+            uploadArea.classList.remove('has-files');
             if (uploadLabel) {
-                uploadLabel.textContent = `${selectedFiles.length} archivo(s) seleccionado(s)`;
-                uploadLabel.style.color = 'var(--accent)';
+                uploadLabel.textContent = 'Arrastra MÚLTIPLES archivos aquí o haz clic (sin límite)';
+                uploadLabel.style.color = 'var(--text-dim)';
             }
-            uploadArea.classList.add('has-files');
-
-            cutterInfo.style.display = 'block';
-            cutterInfo.className = 'info-box';
-            cutterInfo.innerHTML = `
-                <p><strong>${selectedFiles.length}</strong> archivo(s) seleccionado(s)</p>
-                ${videoFiles > 0 ? `<p>${videoFiles} video(s) - se extraerá el audio automáticamente</p>` : ''}
-                ${audioFiles > 0 ? `<p>${audioFiles} audio(s)</p>` : ''}
-                <p>Tamaño total: <strong>${sizeMB} MB</strong></p>
-            `;
-
-            // Mostrar lista de archivos
-            displayFileList(selectedFiles, fileList);
-
-            cutAudioBtn.style.display = 'block';
+            cutterInfo.style.display = 'none';
+            cutAudioBtn.style.display = 'none';
+            cutterClearBtn.style.display = 'none';
+            return;
         }
+
+        fileList.style.display = 'block';
+        uploadArea.classList.add('has-files');
+        cutterClearBtn.style.display = 'inline-block';
+
+        const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
+        const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+        const audioFiles = selectedFiles.filter(f => f.type.startsWith('audio/')).length;
+        const videoFiles = selectedFiles.filter(f => f.type.startsWith('video/')).length;
+
+        if (uploadLabel) {
+            uploadLabel.textContent = `${selectedFiles.length} archivo(s) seleccionado(s)`;
+            uploadLabel.style.color = 'var(--accent)';
+        }
+
+        cutterInfo.style.display = 'block';
+        cutterInfo.className = 'info-box';
+        cutterInfo.innerHTML = `
+            <p><strong>${selectedFiles.length}</strong> archivo(s) seleccionado(s)</p>
+            ${videoFiles > 0 ? `<p>${videoFiles} video(s) - se extraerá el audio automáticamente</p>` : ''}
+            ${audioFiles > 0 ? `<p>${audioFiles} audio(s)</p>` : ''}
+            <p>Tamaño total: <strong>${sizeMB} MB</strong></p>
+        `;
+
+        fileList.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const isVideo = file.type.startsWith('video/');
+            const isAudio = file.type.startsWith('audio/');
+            const icon = isVideo ? 'V' : isAudio ? 'A' : 'F';
+            const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">${icon}</span>
+                    <div class="file-details">
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-meta">${fileSize} MB</span>
+                    </div>
+                </div>
+                <button class="remove-file-btn" onclick="window.cutterRemoveFile(${index})" title="Eliminar archivo">✕</button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+
+        cutAudioBtn.style.display = 'block';
+    }
+
+    window.cutterRemoveFile = removeFile;
+    window.cutterClearAll = clearAllFiles;
+
+    audioFileInput.addEventListener('change', (e) => {
+        const newFiles = Array.from(e.target.files);
+        selectedFiles = selectedFiles.concat(newFiles);
+        audioFileInput.value = '';
+        updateFileDisplay();
     });
 
     cutAudioBtn.addEventListener('click', async () => {
