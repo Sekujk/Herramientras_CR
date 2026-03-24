@@ -207,10 +207,12 @@ function initAudioCutter() {
             downloadLink.download = `audios-cortados-${Date.now()}.zip`;
             downloadLink.click();
 
-            updateProgress(cutterProgress, '¡Completado!', 100);
-
-            cutterInfo.className = 'info-box success';
-            cutterInfo.innerHTML = '<p><strong>Audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+            setTimeout(() => {
+                URL.revokeObjectURL(downloadLink.href);
+                updateProgress(cutterProgress, '¡Completado!', 100);
+                cutterInfo.className = 'info-box success';
+                cutterInfo.innerHTML = '<p><strong>Audios cortados exitosamente</strong></p><p>El archivo ZIP se ha descargado</p>';
+            }, 200);
 
             setTimeout(() => {
                 cutterProgress.style.display = 'none';
@@ -1095,7 +1097,9 @@ function downloadFile(blob, filename) {
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+    }, 200);
 }
 
 function displayFileList(files, container) {
