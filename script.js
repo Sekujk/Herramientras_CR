@@ -1460,6 +1460,104 @@ class AudioWorkerPool {
 // Inicializar pool de workers
 const audioWorkerPool = new AudioWorkerPool(4);
 
+// Variable para FFmpeg WASM en el main thread
+let ffmpegInstance = null;
+let isFFmpegLoading = false;
+
+// Inicializar FFmpeg WASM en el main thread
+async function initFFmpeg() {
+    if (ffmpegInstance && ffmpegInstance.isLoaded && ffmpegInstance.isLoaded()) {
+        return ffmpegInstance;
+    }
+
+    if (isFFmpegLoading) {
+        // Esperar a que termine la carga anterior
+        let waits = 0;
+        while (isFFmpegLoading && waits < 100) {
+            await new Promise(r => setTimeout(r, 100));
+            waits++;
+        }
+        return ffmpegInstance;
+    }
+
+    if (typeof FFmpeg === 'undefined' || !FFmpeg.FFmpeg) {
+        throw new Error('FFmpeg WASM no está disponible en el navegador');
+    }
+
+    isFFmpegLoading = true;
+    try {
+        ffmpegInstance = new FFmpeg.FFmpeg();
+        console.log('🔧 Cargando FFmpeg WASM en main thread...');
+        await ffmpegInstance.load({
+            coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.0/dist/ffmpeg-core.js'
+        });
+        console.log('✅ FFmpeg WASM cargado en main thread');
+        return ffmpegInstance;
+    } catch (error) {
+        console.error('❌ Error cargando FFmpeg:', error);
+        ffmpegInstance = null;
+        throw error;
+    } finally {
+        isFFmpegLoading = false;
+    }
+}
+
+// Encoding con FFmpeg WASM en main thread
+async function encodeWithFFmpeg(wavBytes, format = 'opus', bitrate = 48) {
+    try {
+        const ffmpeg = await initFFmpeg();
+
+        // Limpiar archivos previos
+        try {
+            ffmpeg.FS('unlink', 'input.wav');
+            ffmpeg.FS('unlink', `output.${format}`);
+        } catch (e) {
+            // No existen, está bien
+        }
+
+        // Escribir WAV
+        const wavArray = new Uint8Array(wavBytes);
+        ffmpeg.FS('writeFile', 'input.wav', wavArray);
+
+        // Mapa de codecs
+        const codecMap = {
+            'opus': 'libopus',
+            'mp3': 'libmp3lame',
+            'aac': 'aac',
+            'vorbis': 'libvorbis'
+        };
+
+        // Parámetros FFmpeg
+        let ffmpegArgs = [
+            '-i', 'input.wav',
+            '-c:a', codecMap[format],
+            '-b:a', `${bitrate}k`,
+        ];
+
+        if (format === 'opus') {
+            ffmpegArgs.push('-application', 'audio');
+        }
+
+        ffmpegArgs.push('-y', `output.${format}`);
+
+        console.log('🔄 Ejecutando FFmpeg:', ffmpegArgs.join(' '));
+        await ffmpeg.run(...ffmpegArgs);
+
+        // Leer resultado
+        const data = ffmpeg.FS('readFile', `output.${format}`);
+
+        // Limpiar
+        ffmpeg.FS('unlink', 'input.wav');
+        ffmpeg.FS('unlink', `output.${format}`);
+
+        console.log(`✅ Encoding completado - ${(data.length / 1024).toFixed(2)} KB`);
+        return new Uint8Array(data);
+    } catch (error) {
+        console.error('❌ Error en FFmpeg:', error);
+        throw error;
+    }
+}
+
 // Nueva función bufferToWAV con FFmpeg WASM + fallback
 async function bufferToWAV(audioBuffer) {
     console.log('🎵 Iniciando encoding. Duración:', audioBuffer.duration, 'segundos');
@@ -1468,7 +1566,10 @@ async function bufferToWAV(audioBuffer) {
     if (typeof FFmpeg !== 'undefined' && FFmpeg.FFmpeg) {
         try {
             console.log('🚀 Usando FFmpeg WASM (10x más rápido)');
-            return await audioWorkerPool.encodeAudio(audioBuffer, 'opus', 48);
+            const wavBytes = audioBufferToWavBytes(audioBuffer);
+            const encodedData = await encodeWithFFmpeg(wavBytes, 'opus', 48);
+            const blob = new Blob([encodedData], { type: 'audio/ogg' });
+            return blob;
         } catch (error) {
             console.warn('⚠️ FFmpeg falló, usando fallback a lamejs:', error);
         }
