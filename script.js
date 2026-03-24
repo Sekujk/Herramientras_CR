@@ -2,6 +2,127 @@
 const progressThrottle = {}; // Para throttle de actualizaciones de progreso
 let isProcessing = false; // Rastrear si hay procesamiento en curso
 
+// ==================== WORKERS PARA BACKGROUND PROCESSING ====================
+let keepAliveWorker = null;
+const dataWorkers = [];
+let dataWorkerPool = null;
+
+// Inicializar workers
+function initWorkers() {
+    try {
+        // Keep-Alive Worker - Mantiene activa la pestaña incluso en background
+        keepAliveWorker = new Worker('keepAliveWorker.js');
+        console.log('✅ Keep-Alive Worker creado');
+
+        // Data Processing Workers (4 workers en paralelo)
+        for (let i = 0; i < 4; i++) {
+            const worker = new Worker('dataProcessWorker.js');
+            dataWorkers.push({
+                worker,
+                busy: false,
+                promises: {},
+                taskId: 0
+            });
+        }
+        console.log(`✅ ${dataWorkers.length} Data Processing Workers creados`);
+
+        // Crear pool
+        dataWorkerPool = new DataWorkerPool(dataWorkers);
+        console.log('✅ DataWorkerPool inicializado');
+
+    } catch (error) {
+        console.warn('⚠️ Workers no disponibles, usando main thread:', error.message);
+        dataWorkerPool = null; // Fallback a main thread
+    }
+}
+
+// Detener workers cuando termine el procesamiento
+function stopWorkers() {
+    if (keepAliveWorker) {
+        keepAliveWorker.postMessage({ command: 'stop' });
+        console.log('🔴 Keep-Alive Worker detenido');
+    }
+}
+
+// Data Worker Pool - Gestiona múltiples workers con load balancing
+class DataWorkerPool {
+    constructor(workersArray) {
+        this.workers = workersArray;
+        this.queue = [];
+    }
+
+    async processSegment(audioBuffer, startTime, endTime, segmentIndex) {
+        return new Promise((resolve, reject) => {
+            const task = {
+                audioBuffer,
+                startTime,
+                endTime,
+                segmentIndex,
+                resolve,
+                reject
+            };
+
+            // Buscar worker disponible
+            const available = this.workers.find(w => !w.busy);
+            if (available) {
+                this.runTask(available, task);
+            } else {
+                // Si todos están ocupados, agregar a cola
+                this.queue.push(task);
+            }
+        });
+    }
+
+    runTask(workerObj, task) {
+        workerObj.busy = true;
+        const taskId = ++workerObj.taskId;
+        const { audioBuffer, startTime, endTime, segmentIndex } = task;
+
+        // Guardar promesa para manejar respuesta
+        workerObj.promises[taskId] = {
+            resolve: task.resolve,
+            reject: task.reject
+        };
+
+        // Configurar listener para respuesta
+        const messageHandler = (e) => {
+            const { success, wavBytes, error, id } = e.data;
+
+            if (id === taskId && workerObj.promises[id]) {
+                if (success) {
+                    const wavArray = new Uint8Array(wavBytes);
+                    workerObj.promises[id].resolve(wavArray);
+                } else {
+                    workerObj.promises[id].reject(new Error(error));
+                }
+                delete workerObj.promises[id];
+            }
+
+            workerObj.busy = false;
+
+            // Procesar siguiente tarea en cola
+            if (this.queue.length > 0) {
+                const nextTask = this.queue.shift();
+                this.runTask(workerObj, nextTask);
+            }
+        };
+
+        // Solo agregar listener una vez por worker
+        workerObj.worker.onmessage = messageHandler;
+
+        // Enviar data al worker
+        workerObj.worker.postMessage(
+            {
+                audioBuffer,
+                startTime,
+                endTime,
+                segmentIndex,
+                id: taskId
+            }
+        );
+    }
+}
+
 // Aviso antes de cerrar si hay procesamiento
 window.addEventListener('beforeunload', (event) => {
     if (isProcessing) {
@@ -84,6 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(toolId).classList.add('active');
         });
     });
+
+    // Inicializar workers para procesamiento en background
+    initWorkers();
 
     // Inicializar drag and drop para todas las áreas de subida
     initDragAndDrop();
@@ -260,6 +384,12 @@ function initAudioCutter() {
         cutAudioBtn.disabled = true;
         isProcessing = true;
 
+        // Iniciar keep-alive worker para prevenir throttling en background
+        if (keepAliveWorker) {
+            keepAliveWorker.postMessage({ command: 'start' });
+            console.log('🟢 Keep-Alive Worker iniciado');
+        }
+
         console.log('🎬 INICIANDO CORTADOR DE AUDIOS');
         console.log('Total archivos a procesar:', selectedFiles.length);
         console.log('Duración de segmento:', segmentDuration / 60, 'minutos');
@@ -317,32 +447,34 @@ function initAudioCutter() {
                     for (let i = 0; i < numSegments; i++) {
                         const startTime = i * segmentDuration;
                         const endTime = Math.min((i + 1) * segmentDuration, duration);
-                        const segmentLength = endTime - startTime;
 
-                        const segmentBuffer = audioBuffer.constructor === AudioBuffer
-                            ? new AudioBuffer({
-                                numberOfChannels: audioBuffer.numberOfChannels,
-                                length: segmentLength * audioBuffer.sampleRate,
-                                sampleRate: audioBuffer.sampleRate
-                            })
-                            : audioBuffer.context.createBuffer(
-                                audioBuffer.numberOfChannels,
-                                segmentLength * audioBuffer.sampleRate,
-                                audioBuffer.sampleRate
-                            );
+                        console.log('🔄 Segmento', (i + 1) + '/' + numSegments, '- Procesando...');
 
-                        for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-                            const channelData = audioBuffer.getChannelData(channel);
-                            const segmentData = segmentBuffer.getChannelData(channel);
-                            const startSample = Math.floor(startTime * audioBuffer.sampleRate);
+                        let wavBytes;
 
-                            for (let j = 0; j < segmentData.length; j++) {
-                                segmentData[j] = channelData[startSample + j];
+                        // Si hay workers disponibles, usar worker para copiar datos
+                        if (dataWorkerPool) {
+                            try {
+                                console.log('👷 Delegando a Data Worker...');
+                                wavBytes = await dataWorkerPool.processSegment(
+                                    audioBuffer,
+                                    startTime,
+                                    endTime,
+                                    i + 1
+                                );
+                            } catch (error) {
+                                console.warn('⚠️ Worker falló, usando main thread:', error.message);
+                                // Fallback: Hacer en main thread
+                                wavBytes = audioBufferToWavBytes(audioBuffer, startTime, endTime);
                             }
+                        } else {
+                            // Sin workers, hacer en main thread
+                            wavBytes = audioBufferToWavBytes(audioBuffer, startTime, endTime);
                         }
 
-                        console.log('🔄 Segmento', (i + 1) + '/' + numSegments, '- Iniciando audio encoding...');
-                        const audioBlob = await bufferToWave(segmentBuffer);
+                        // Codificar con FFmpeg WASM
+                        console.log('📝 Segment', (i + 1), '- Iniciando audio encoding...');
+                        const audioBlob = await encodeWithFFmpeg(wavBytes, 'opus', 48);
                         console.log('✅ Segmento', (i + 1), 'listo -', (audioBlob.size / 1024).toFixed(2), 'KB');
                         zip.file(`${fileName}-${i + 1}.ogg`, audioBlob);
 
@@ -386,15 +518,17 @@ function initAudioCutter() {
             cutterInfo.style.display = 'block';
 
             setTimeout(() => {
+                stopWorkers(); // Detener workers
                 cutAudioBtn.disabled = false;
                 isProcessing = false;
             }, 500);
 
         } catch (error) {
             console.error('❌ ERROR EN CORTADOR:', error);
+            stopWorkers(); // Detener workers en caso de error
             cutterInfo.className = 'info-box error';
             cutterInfo.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
-            cutterInfo.style.display = 'block';
+            cutterInfo.style.display = 'none';
             cutterProgress.style.display = 'none';
             cutAudioBtn.disabled = false;
             isProcessing = false;
