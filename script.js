@@ -1355,7 +1355,7 @@ async function bufferToWAV(audioBuffer) {
                 throw new Error('lamejs librería no cargada');
             }
 
-            const encoder = new window.lamejs.Encoder(targetSampleRate, numOfChannels, kbps);
+            const encoder = new window.lamejs.Mp3Encoder(numOfChannels, targetSampleRate, kbps);
             const mp3Data = [];
 
             // Procesar audio en chunks
@@ -1364,9 +1364,9 @@ async function bufferToWAV(audioBuffer) {
                 let left = audioData[0].subarray(i, i + chunkSize);
                 let right = numOfChannels > 1 ? audioData[1].subarray(i, i + chunkSize) : left;
 
-                // Convertir Float32 a Int16
-                const int16Left = new Int16Array(left.length);
-                const int16Right = new Int16Array(right.length);
+                // Convertir Float32 a Int16 como Arrays (no TypedArrays)
+                const int16Left = [];
+                const int16Right = [];
 
                 for (let j = 0; j < left.length; j++) {
                     int16Left[j] = Math.max(-1, Math.min(1, left[j])) < 0 ? left[j] * 0x8000 : left[j] * 0x7FFF;
@@ -1375,14 +1375,14 @@ async function bufferToWAV(audioBuffer) {
 
                 const chunk = encoder.encodeBuffer(int16Left, int16Right);
                 if (chunk.length > 0) {
-                    mp3Data.push(new Uint8Array(chunk));
+                    mp3Data.push(chunk);
                 }
             }
 
             // Finalizar codificación
             const finalChunk = encoder.flush();
             if (finalChunk.length > 0) {
-                mp3Data.push(new Uint8Array(finalChunk));
+                mp3Data.push(finalChunk);
             }
 
             // Crear Blob MP3
